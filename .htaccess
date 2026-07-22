@@ -1,7 +1,7 @@
 #Restringir el acceso a los directorios
 Options -Indexes
 
-Proteger archivos sensibles (Bloquear acceso directo a .sql, .env, .log)
+# Proteger archivos sensibles (Bloquear acceso directo a .sql, .env, .log)
 <FilesMatch "\.(sql|env|log|md|git)$">
     Require all denied
 </FilesMatch>
