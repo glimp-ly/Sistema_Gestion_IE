@@ -5,9 +5,8 @@
      * una instancia/conexión activa a la base de datos durante el ciclo de vida de la solicitud.
      */
     class Conexion {
-        // Credenciales de conexión (configuración típica local en XAMPP/WAMP)
-        private static $host = "localhost";
-        private static $db_name = "colegio_DB";
+        private static $host = "localhost;port=3306";
+        private static $db_name = "colegio_db";
         private static $username = "root";
         private static $password = "";
 
@@ -45,7 +44,7 @@
 
                     // Al usuario le mostramos un mensaje genérico para no revelar detalles sensibles (como contraseñas o rutas de archivos)
                     throw new Exception("Error interno del servidor. Inténtelo más tarde.");
-                }   
+                }
             }
             // Retorna la conexión activa (objeto PDO)
             return self::$instance;

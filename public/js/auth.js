@@ -62,19 +62,27 @@
       const urlParams = new URLSearchParams(window.location.search);
       const u = urlParams.get('u');
       if (u === 'docen') {
-        return {
+        const session = {
           username: 'docen',
           role: 'docente',
           name: 'Prof. Carlos Rivas',
           roleLabel: 'Docente de Primaria'
         };
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        } catch (e) {}
+        return session;
       } else if (u === 'dire') {
-        return {
+        const session = {
           username: 'dire',
           role: 'administrativo',
           name: 'Lic. Jose Perez',
           roleLabel: 'Director Administrativo'
         };
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        } catch (e) {}
+        return session;
       }
       return null;
     },
