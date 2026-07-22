@@ -1,6 +1,20 @@
-// Admin Module Views & Event Listeners
+/**
+ * Módulo de Administración (AdminModule)
+ * 
+ * Este archivo actúa como el Controlador de la interfaz del personal administrativo (Director).
+ * Funciona bajo una arquitectura de Single Page Application (SPA), donde en lugar de recargar
+ * la página completa, se definen funciones JavaScript que renderizan dinámicamente el HTML
+ * dentro del elemento contenedor principal (#main-content).
+ * 
+ * Características clave:
+ * 1. Comunicación Local con SchoolDB: Consume y persiste información del estado del colegio.
+ * 2. Renderizado Reactivo del DOM: Modifica el DOM mediante plantillas de texto dinámicas (Template Literals).
+ * 3. Escuchadores de Eventos: Asigna manejadores a formularios, botones de cambio de estado y modales.
+ * 4. Integración de Componentes: Renderiza indicadores clave de rendimiento (KPIs), tablas interactivas y gráficos CSS.
+ */
 (function() {
 
+  // Función auxiliar para actualizar el título de la página en la barra de navegación superior
   function setPageTitle(title) {
     const el = document.getElementById('navbar-page-title');
     if (el) el.textContent = title;

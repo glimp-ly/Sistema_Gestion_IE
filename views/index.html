@@ -4,22 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cargando IEP Corazón de Jesús...</title>
+  
+  <!-- Carga del módulo de autenticación (contiene funciones para validar y recuperar la sesión del usuario) -->
   <script src="../public/js/auth.js"></script>
+  
   <script>
+    // Al cargar la estructura HTML (DOM), se verifica inmediatamente la sesión actual.
     document.addEventListener('DOMContentLoaded', function() {
+      // Intentamos recuperar los datos de la sesión activa en el navegador
       const session = window.SchoolAuth.getSession();
+      
+      // Si no hay sesión iniciada, redirigimos al formulario de Login
       if (!session) {
         window.location.replace('login.html');
-      } else if (session.role === 'docente') {
+      } 
+      // Si la sesión corresponde al rol de Docente, redirigimos a su panel respectivo
+      else if (session.role === 'docente') {
         window.location.replace('docente.html?u=docen');
-      } else if (session.role === 'administrativo') {
+      } 
+      // Si la sesión corresponde a Administrativo (Admin), redirigimos al panel administrativo
+      else if (session.role === 'administrativo') {
         window.location.replace('admin.html?u=dire');
-      } else {
+      } 
+      // En cualquier otro caso indeterminado, enviamos a la página de login
+      else {
         window.location.replace('login.html');
       }
     });
   </script>
 </head>
+<!-- Cuerpo del HTML que actúa como pantalla de carga intermedia mientras se define el redireccionamiento -->
 <body style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #F8FAFC; color: #8C452B;">
   <div style="text-align: center;">
     <h2 style="margin-bottom: 10px;">Verificando credenciales...</h2>
