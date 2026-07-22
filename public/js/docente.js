@@ -1,7 +1,20 @@
-// Docente Module Views & Event Listeners
+/**
+ * Módulo de Docente (DocenteModule)
+ * 
+ * Este archivo actúa como el Controlador principal para la vista del Docente.
+ * Organiza e inyecta dinámicamente las interfaces necesarias para que el docente pueda:
+ * 1. Gestionar su información personal e interactuar en el chat directo con Dirección.
+ * 2. Visualizar y evaluar a los alumnos de sus cursos (Matemática, Ciencia, etc.), guardando notas.
+ * 3. Revisar su calendario, registrar la asistencia diaria (Presente, Tarde, Falta).
+ * 4. Redactar reportes de incidencias disciplinarias de los estudiantes.
+ * 5. Consultar estadísticas de rendimiento general, aprobados, desaprobados y promedios.
+ * 
+ * Se basa en una arquitectura SPA (Single Page Application) manipulando el DOM
+ * mediante Template Literals e interactuando directamente con el motor de persistencia SchoolDB.
+ */
 (function() {
 
-  // Global update page title helper
+  // Función auxiliar para actualizar el título de la página en la barra superior
   function setPageTitle(title) {
     const el = document.getElementById('navbar-page-title');
     if (el) el.textContent = title;
