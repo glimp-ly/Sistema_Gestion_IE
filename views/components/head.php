@@ -36,3 +36,4 @@
   <!-- Script de Autenticación y Guardias de Seguridad -->
   <script src="<?php echo BASE_URL; ?>public/js/auth.js"></script>
 </head>
+<input type="hidden" name="csrf_token" value="<?php echo Security::generarTokenCSRF(); ?>">

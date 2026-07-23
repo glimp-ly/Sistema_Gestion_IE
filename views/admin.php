@@ -1,5 +1,5 @@
 <?php
-Security::verificarRol(['Director', 'Administrador', 'Director']);
+Security::verificarRol(['Director', 'Administrador']);
 
 $pageTitle = "Portal Administrativo - IEP Corazón de Jesús College";
 require_once "views/components/head.php";

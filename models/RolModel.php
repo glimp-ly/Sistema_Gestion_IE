@@ -12,7 +12,7 @@ class RolModel
 
     public function getRoles()
     {
-        $query = "SELECT id, rol_nombre FROM roles ORDER BY id ASC";
+        $query = "SELECT id_rol, nombre FROM ROL ORDER BY id_rol ASC";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -20,7 +20,7 @@ class RolModel
 
     public function getRolById($id)
     {
-        $query = "SELECT id, rol_nombre FROM roles WHERE id = :id";
+        $query = "SELECT id_rol, nombre FROM ROL WHERE id_rol = :id";
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':id', $id, PDO::PARAM_INT);
         $stmt->execute();

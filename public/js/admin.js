@@ -68,6 +68,7 @@
           <button type="submit" class="btn btn-primary" style="width: 100%;">Guardar Datos de Contacto</button>
         </form>
       </div>
+      <div id="password-change-section" style="max-width: 650px; margin: 0 auto;"></div>
     `;
 
     const form = document.getElementById('admin-info-form');
@@ -77,6 +78,10 @@
       alert.innerHTML = `<div class="badge badge-success" style="padding: 10px; width: 100%; border-radius: 6px; text-align: center; margin-bottom: 10px;">✓ Datos actualizados correctamente.</div>`;
       setTimeout(() => { alert.innerHTML = ''; }, 3000);
     });
+
+    if (window.PasswordModule) {
+      window.PasswordModule.renderChangePasswordForm(document.getElementById('password-change-section'));
+    }
   }
 
   /* ==========================================================================

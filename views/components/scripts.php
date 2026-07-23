@@ -15,6 +15,7 @@ $scriptNombre = $moduleScript ?? 'admin.js';
 <!-- 2. router.js maneja la navegación SPA controlando el hashchange de la URL -->
 <script src="<?php echo BASE_URL; ?>public/js/router.js"></script>
 <!-- 3. Módulo de lógica de negocio específico del rol -->
+<script src="<?php echo BASE_URL; ?>public/js/password.js"></script>
 <script src="<?php echo BASE_URL; ?>public/js/<?php echo htmlspecialchars($scriptNombre); ?>"></script>
 
 <script>

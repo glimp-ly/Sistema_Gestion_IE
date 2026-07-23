@@ -104,6 +104,7 @@
           </div>
         </div>
       </div>
+      <div id="password-change-section"></div>
     `;
 
     // Handle profile update submit
@@ -118,6 +119,10 @@
       `;
       setTimeout(() => { alertContainer.innerHTML = ''; }, 3000);
     });
+
+    if (window.PasswordModule) {
+      window.PasswordModule.renderChangePasswordForm(document.getElementById('password-change-section'));
+    }
 
     // Handle Send Message
     const chatInput = document.getElementById('docent-chat-input');

@@ -213,4 +213,27 @@ class UsuarioModel
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['total'];
     }
+
+    public function getPasswordHashById($idCredenciales)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT password_hash FROM CREDENCIALES WHERE id_credenciales = :id"
+        );
+        $stmt->bindParam(':id', $idCredenciales, PDO::PARAM_INT);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $row['password_hash'] : null;
+    }
+
+    public function cambiarPassword($idCredenciales, $nuevoHash)
+    {
+        $stmt = $this->conn->prepare(
+            "UPDATE CREDENCIALES SET password_hash = :hash WHERE id_credenciales = :id"
+        );
+        $stmt->execute([
+            ':hash' => $nuevoHash,
+            ':id'   => $idCredenciales,
+        ]);
+        return $stmt->rowCount() > 0;
+    }
 }

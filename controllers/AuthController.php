@@ -93,6 +93,54 @@ class AuthController
         exit;
     }
 
+    public function cambiarPassword()
+    {
+        if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+            echo json_encode(["success" => false, "mensaje" => "Método no permitido."]);
+            return;
+        }
+
+        Security::verificarSesion();
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (!Security::validarTokenCSRF($csrfToken)) {
+            echo json_encode(["success" => false, "mensaje" => "Token de seguridad inválido."]);
+            return;
+        }
+
+        $actual    = $_POST['password_actual'] ?? '';
+        $nueva     = $_POST['password_nueva'] ?? '';
+        $confirmar = $_POST['password_confirmar'] ?? '';
+
+        if (empty($actual) || empty($nueva) || empty($confirmar)) {
+            echo json_encode(["success" => false, "mensaje" => "Todos los campos son obligatorios."]);
+            return;
+        }
+
+        if ($nueva !== $confirmar) {
+            echo json_encode(["success" => false, "mensaje" => "Las contraseñas nuevas no coinciden."]);
+            return;
+        }
+
+        if (strlen($nueva) < 4) {
+            echo json_encode(["success" => false, "mensaje" => "La contraseña debe tener al menos 4 caracteres."]);
+            return;
+        }
+
+        $idCredenciales = $_SESSION['usuario_id'];
+        $hashActual = $this->usuarios->getPasswordHashById($idCredenciales);
+
+        if (!$hashActual || !Security::verificarPassword($actual, $hashActual)) {
+            echo json_encode(["success" => false, "mensaje" => "La contraseña actual es incorrecta."]);
+            return;
+        }
+
+        $nuevoHash = Security::encriptarPassword($nueva);
+        $this->usuarios->cambiarPassword($idCredenciales, $nuevoHash);
+
+        echo json_encode(["success" => true, "mensaje" => "Contraseña actualizada correctamente."]);
+    }
+
     public function accesoDenegado()
     {
         require_once "views/errors/403.php";
