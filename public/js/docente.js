@@ -607,98 +607,155 @@
     }
 
     function loadAttendanceTable() {
-      db = refreshData();
       const tbody = document.getElementById('asistencia-tbody');
       const courseId = picker.value;
-      const course = db.courses.find(c => c.id === courseId);
-      
+      // Usamos mockData solo para obtener el nivel del curso seleccionado
+      const course = window.SchoolDB.getData().courses.find(c => c.id === courseId);
+
       if (!course) return;
 
-      document.getElementById('asist-card-title').textContent = `Asistencia - ${course.name} (${selectedDate})`;
+      document.getElementById('asist-card-title').textContent =
+        `Asistencia - ${course.name} (${selectedDate})`;
 
-      // Smart filter students by course grade and level
-      let levelStudents = db.students.filter(s => s.nivel === course.nivel);
-      if (course.id.includes('5P') || course.name.includes('5to Primaria')) {
-        levelStudents = levelStudents.filter(s => s.grado.includes('5to Primaria'));
-      } else if (course.id.includes('INI5A') || course.name.includes('Inicial')) {
-        levelStudents = levelStudents.filter(s => s.grado.includes('Inicial'));
-      }
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;
+        color: var(--neutral-medium); padding: 24px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>Cargando estudiantes...</td></tr>`;
 
-      // Filter by search query
-      const query = searchInput.value.trim().toLowerCase();
-      if (query) {
-        levelStudents = levelStudents.filter(s => s.name.toLowerCase().includes(query) || s.id.toLowerCase().includes(query));
-      }
+      const apiUrl = new URL('../public/api/asistencia.php', window.location.href);
+      apiUrl.searchParams.set('fecha', selectedDate);
+      apiUrl.searchParams.set('nivel', course.nivel);
 
-      let rows = '';
-      if (levelStudents.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--neutral-medium); padding: 24px;">No se encontraron estudiantes para este curso.</td></tr>`;
-        return;
-      }
-
-      levelStudents.forEach(st => {
-        const currentStatus = st.attendance[selectedDate] || 'P'; // default present
-        
-        let rowBg = '';
-        if (currentStatus === 'P') rowBg = 'background-color: rgba(40, 167, 69, 0.04);';
-        if (currentStatus === 'T') rowBg = 'background-color: rgba(255, 193, 7, 0.06);';
-        if (currentStatus === 'F') rowBg = 'background-color: rgba(220, 53, 69, 0.05);';
-
-        rows += `
-          <tr data-st-id="${st.id}" style="${rowBg} transition: background-color var(--transition-fast);">
-            <td style="font-weight: 600;">${st.id}</td>
-            <td style="font-weight: 500;">${st.name}</td>
-            <td>${st.grado}</td>
-            <td style="text-align: center;">
-              <div style="display: flex; gap: 20px; justify-content: center;">
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--success);">
-                  <input type="radio" name="att-${st.id}" value="P" ${currentStatus === 'P' ? 'checked' : ''} style="accent-color: var(--success); width: 16px; height: 16px;"> P
-                </label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--warning);">
-                  <input type="radio" name="att-${st.id}" value="T" ${currentStatus === 'T' ? 'checked' : ''} style="accent-color: var(--warning); width: 16px; height: 16px;"> T
-                </label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--danger);">
-                  <input type="radio" name="att-${st.id}" value="F" ${currentStatus === 'F' ? 'checked' : ''} style="accent-color: var(--danger); width: 16px; height: 16px;"> F
-                </label>
-              </div>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = rows;
-
-      // Attach dynamic background change listener
-      tbody.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-          if (this.checked) {
-            updateRowHighlight(this.closest('tr'), this.value);
+      fetch(apiUrl.toString(), {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        cache: 'no-store'
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (!res.success) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;
+              color:var(--danger);padding:24px;">Error: ${res.message}</td></tr>`;
+            return;
           }
+
+          let students = Array.isArray(res.data) ? res.data : [];
+
+          // Filtro por búsqueda local
+          const query = searchInput.value.trim().toLowerCase();
+          if (query) {
+            students = students.filter(s =>
+              s.nombre_completo.toLowerCase().includes(query) ||
+              s.cod_alumno.toLowerCase().includes(query)
+            );
+          }
+
+          if (students.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;
+              color:var(--neutral-medium);padding:24px;">
+              No se encontraron estudiantes para este nivel.</td></tr>`;
+            return;
+          }
+
+          let rows = '';
+          students.forEach(st => {
+            const currentStatus = st.tipo || 'P';
+            let rowBg = '';
+            if (currentStatus === 'P') rowBg = 'background-color:rgba(40,167,69,0.04);';
+            if (currentStatus === 'T') rowBg = 'background-color:rgba(255,193,7,0.06);';
+            if (currentStatus === 'F') rowBg = 'background-color:rgba(220,53,69,0.05);';
+
+            rows += `
+              <tr data-st-id="${st.id_alumno}" style="${rowBg} transition:background-color var(--transition-fast);">
+                <td style="font-weight:600;">${st.cod_alumno}</td>
+                <td style="font-weight:500;">${st.nombre_completo}</td>
+                <td>${st.nombre_grado}${st.seccion ? ' &ndash; ' + st.seccion : ''}</td>
+                <td style="text-align:center;">
+                  <div style="display:flex;gap:20px;justify-content:center;">
+                    <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:600;color:var(--success);">
+                      <input type="radio" name="att-${st.id_alumno}" value="P"
+                        ${currentStatus === 'P' ? 'checked' : ''}
+                        style="accent-color:var(--success);width:16px;height:16px;"> P
+                    </label>
+                    <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:600;color:var(--warning);">
+                      <input type="radio" name="att-${st.id_alumno}" value="T"
+                        ${currentStatus === 'T' ? 'checked' : ''}
+                        style="accent-color:var(--warning);width:16px;height:16px;"> T
+                    </label>
+                    <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:600;color:var(--danger);">
+                      <input type="radio" name="att-${st.id_alumno}" value="F"
+                        ${currentStatus === 'F' ? 'checked' : ''}
+                        style="accent-color:var(--danger);width:16px;height:16px;"> F
+                    </label>
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+          tbody.innerHTML = rows;
+
+          // Highlight dinámico al cambiar radio
+          tbody.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+              if (this.checked) updateRowHighlight(this.closest('tr'), this.value);
+            });
+          });
+        })
+        .catch(() => {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;
+            color:var(--danger);padding:24px;">
+            Error de conexión con el servidor.</td></tr>`;
         });
-      });
     }
 
-    // Save action
+    // Confirmar Asistencia → persiste en la BD vía API
     saveBtn.addEventListener('click', function() {
       const rows = document.querySelectorAll('#asistencia-tbody tr');
-      let savedCount = 0;
+      const registros = [];
+
       rows.forEach(tr => {
-        const stId = tr.getAttribute('data-st-id');
+        const stId = parseInt(tr.getAttribute('data-st-id'), 10);
         if (!stId) return;
         const radio = tr.querySelector(`input[name="att-${stId}"]:checked`);
-        if (radio) {
-          window.SchoolDB.saveAttendance(stId, selectedDate, radio.value);
-          savedCount++;
-        }
+        if (radio) registros.push({ id_alumno: stId, tipo: radio.value });
       });
 
-      if (savedCount > 0) {
-        const indicator = document.getElementById('asist-save-indicator');
-        if (indicator) {
-          indicator.style.display = 'block';
-          setTimeout(() => { indicator.style.display = 'none'; }, 3000);
-        }
-      }
+      if (registros.length === 0) return;
+
+      const indicator = document.getElementById('asist-save-indicator');
+
+      fetch(new URL('../public/api/asistencia.php', window.location.href).toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ fecha: selectedDate, registros: registros })
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (indicator) {
+            indicator.textContent = res.success
+              ? `✓ ${res.message}`
+              : `✗ ${res.message}`;
+            indicator.className = 'badge ' + (res.success ? 'badge-success' : 'badge-danger');
+            indicator.style.display = 'block';
+            setTimeout(() => { indicator.style.display = 'none'; }, 3000);
+          }
+        })
+        .catch(() => {
+          if (indicator) {
+            indicator.textContent = '✗ Error de conexión con el servidor.';
+            indicator.className = 'badge badge-danger';
+            indicator.style.display = 'block';
+            setTimeout(() => { indicator.style.display = 'none'; }, 3000);
+          }
+        });
     });
+
   }
 
   /* ==========================================================================
@@ -1168,118 +1225,117 @@
         const gradeSelect = document.getElementById('att-filter-grade');
         const rangeSelect = document.getElementById('att-filter-range');
 
-        function updateAttendanceReport() {
-          const query = searchInput.value.trim().toLowerCase();
-          const levelVal = levelSelect.value;
-          const gradeVal = gradeSelect.value;
-          const rangeVal = rangeSelect.value;
+        // Datos reales de la BD (se cargan una vez, se filtran en cliente)
+        let attData = [];
 
-          const filtered = db.students.filter(s => {
-            const matchesText = s.name.toLowerCase().includes(query) || s.id.toLowerCase().includes(query);
+        function renderAttendanceTable() {
+          const query      = searchInput.value.trim().toLowerCase();
+          const levelVal   = levelSelect.value;
+          const gradeVal   = gradeSelect.value;
+          const rangeVal   = rangeSelect.value;
+
+          const filtered = attData.filter(s => {
+            const matchesText  = s.nombre_completo.toLowerCase().includes(query) ||
+                                 s.cod_alumno.toLowerCase().includes(query);
             const matchesLevel = levelVal === 'todos' || s.nivel === levelVal;
-            const matchesGrade = gradeVal === 'todos' || s.grado === gradeVal;
-
-            let p = 0, total = 0;
-            Object.values(s.attendance).forEach(st => {
-              if (st === 'P') p++;
-              total++;
-            });
-            const attendancePercent = total > 0 ? Math.round((p / total) * 100) : 100;
-
+            const matchesGrade = gradeVal === 'todos' || s.nombre_grado === gradeVal;
+            const pct = parseFloat(s.pct_asistencia) || 100;
             let matchesRange = true;
-            if (rangeVal === 'perfecta') matchesRange = attendancePercent === 100;
-            else if (rangeVal === 'regular') matchesRange = attendancePercent >= 80 && attendancePercent < 100;
-            else if (rangeVal === 'critica') matchesRange = attendancePercent < 80;
-
+            if (rangeVal === 'perfecta') matchesRange = pct === 100;
+            else if (rangeVal === 'regular') matchesRange = pct >= 80 && pct < 100;
+            else if (rangeVal === 'critica') matchesRange = pct < 80;
             return matchesText && matchesLevel && matchesGrade && matchesRange;
           });
 
-          // Metrics
           let presentCount = 0, lateCount = 0, absentCount = 0, totalAtt = 0;
           let tableRows = '';
 
           filtered.forEach(s => {
-            let p = 0, t = 0, f = 0;
-            Object.values(s.attendance).forEach(status => {
-              if (status === 'P') p++;
-              if (status === 'T') t++;
-              if (status === 'F') f++;
-              totalAtt++;
-            });
-
-            presentCount += p;
-            lateCount += t;
-            absentCount += f;
-
-            const totalDays = p + t + f;
-            const attendancePercent = totalDays > 0 ? Math.round((p / totalDays) * 100) : 100;
-            const badCell = attendancePercent < 80 ? 'background-color: var(--danger-bg); color: var(--danger); font-weight:700;' : '';
-
+            const p   = parseInt(s.presentes)  || 0;
+            const t   = parseInt(s.tardanzas)  || 0;
+            const f   = parseInt(s.faltas)     || 0;
+            const pct = parseFloat(s.pct_asistencia) || 100;
+            presentCount += p; lateCount += t; absentCount += f;
+            totalAtt += p + t + f;
+            const badCell = pct < 80
+              ? 'background-color:var(--danger-bg);color:var(--danger);font-weight:700;'
+              : '';
             tableRows += `
               <tr>
-                <td style="font-weight:600;">${s.id}</td>
-                <td>${s.name}</td>
-                <td>${s.grado}</td>
-                <td style="text-align: center; color: var(--success); font-weight: 600;">${p}</td>
-                <td style="text-align: center; color: var(--warning); font-weight: 600;">${t}</td>
-                <td style="text-align: center; color: var(--danger); font-weight: 600;">${f}</td>
-                <td style="text-align: center; ${badCell}">${attendancePercent}%</td>
+                <td style="font-weight:600;">${s.cod_alumno}</td>
+                <td>${s.nombre_completo}</td>
+                <td>${s.nombre_grado}${s.seccion ? ' &ndash; ' + s.seccion : ''}</td>
+                <td style="text-align:center;color:var(--success);font-weight:600;">${p}</td>
+                <td style="text-align:center;color:var(--warning);font-weight:600;">${t}</td>
+                <td style="text-align:center;color:var(--danger);font-weight:600;">${f}</td>
+                <td style="text-align:center;${badCell}">${pct}%</td>
               </tr>
             `;
           });
 
           const ratePresent = totalAtt > 0 ? Math.round((presentCount / totalAtt) * 100) : 100;
-          const rateLate = totalAtt > 0 ? Math.round((lateCount / totalAtt) * 100) : 0;
-          const rateAbsent = totalAtt > 0 ? Math.round((absentCount / totalAtt) * 100) : 0;
+          const rateLate    = totalAtt > 0 ? Math.round((lateCount    / totalAtt) * 100) : 0;
+          const rateAbsent  = totalAtt > 0 ? Math.round((absentCount  / totalAtt) * 100) : 0;
 
-          // Render stats cards
           const metricsRow = document.getElementById('att-metrics-row');
           metricsRow.innerHTML = `
             <div class="metric-card">
-              <div class="metric-icon-box" style="background-color: var(--success-bg); color: var(--success);">
+              <div class="metric-icon-box" style="background-color:var(--success-bg);color:var(--success);">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
               </div>
               <div class="metric-details">
                 <span class="metric-lbl">Tasa de Asistencia</span>
-                <span class="metric-val" style="color: var(--success);">${ratePresent}%</span>
+                <span class="metric-val" style="color:var(--success);">${ratePresent}%</span>
               </div>
             </div>
             <div class="metric-card">
-              <div class="metric-icon-box" style="background-color: var(--warning-bg); color: var(--warning);">
+              <div class="metric-icon-box" style="background-color:var(--warning-bg);color:var(--warning);">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
               </div>
               <div class="metric-details">
                 <span class="metric-lbl">Tardanzas Totales</span>
-                <span class="metric-val" style="color: var(--warning);">${rateLate}%</span>
+                <span class="metric-val" style="color:var(--warning);">${rateLate}%</span>
               </div>
             </div>
             <div class="metric-card">
-              <div class="metric-icon-box" style="background-color: var(--danger-bg); color: var(--danger);">
+              <div class="metric-icon-box" style="background-color:var(--danger-bg);color:var(--danger);">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
               </div>
               <div class="metric-details">
                 <span class="metric-lbl">Inasistencias Totales</span>
-                <span class="metric-val" style="color: var(--danger);">${rateAbsent}%</span>
+                <span class="metric-val" style="color:var(--danger);">${rateAbsent}%</span>
               </div>
             </div>
           `;
 
           const tbody = document.getElementById('att-tbody');
-          if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--neutral-medium); padding: 24px;">No se encontraron registros de asistencias con los filtros seleccionados.</td></tr>`;
-          } else {
-            tbody.innerHTML = tableRows;
-          }
+          tbody.innerHTML = filtered.length === 0
+            ? `<tr><td colspan="7" style="text-align:center;color:var(--neutral-medium);padding:24px;">No se encontraron registros con los filtros seleccionados.</td></tr>`
+            : tableRows;
 
           document.getElementById('att-count-badge').textContent = `${filtered.length} Alumno(s)`;
         }
 
-        searchInput.addEventListener('input', updateAttendanceReport);
-        levelSelect.addEventListener('change', updateAttendanceReport);
-        gradeSelect.addEventListener('change', updateAttendanceReport);
-        rangeSelect.addEventListener('change', updateAttendanceReport);
+        // Cargar desde la BD al abrir la pestaña
+        fetch(new URL('../public/api/asistencia.php?tipo=resumen', window.location.href).toString(), {
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          cache: 'no-store'
+        })
+          .then(r => r.json())
+          .then(res => {
+            attData = (res.success && Array.isArray(res.data)) ? res.data : [];
+            renderAttendanceTable();
+          })
+          .catch(() => {
+            document.getElementById('att-tbody').innerHTML =
+              `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:24px;">Error de conexión con el servidor.</td></tr>`;
+          });
 
-        updateAttendanceReport();
+        searchInput.addEventListener('input',  renderAttendanceTable);
+        levelSelect.addEventListener('change', renderAttendanceTable);
+        gradeSelect.addEventListener('change', renderAttendanceTable);
+        rangeSelect.addEventListener('change', renderAttendanceTable);
+
       } 
       else if (tabName === 'filters') {
         btnFilters.classList.add('active');
