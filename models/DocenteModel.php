@@ -1,4 +1,12 @@
 <?php
+/**
+ * =====================================================================
+ * MODELO: DocenteModel.php
+ * Acceso a datos de la entidad DOCENTES conectada a PERSONAS, EXTRA_PERSONA,
+ * CREDENCIALES y USUARIO_ROL en MySQL (Nombres de tabla en MAYÚSCULAS).
+ * =====================================================================
+ */
+
 class DocenteModel
 {
     private $pdo;
@@ -10,183 +18,196 @@ class DocenteModel
 
     public function ensureTable(): void
     {
-        $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS personas (" .
-            "id_persona INT AUTO_INCREMENT PRIMARY KEY, " .
-            "dni VARCHAR(20) NOT NULL, " .
-            "nombre VARCHAR(100) NOT NULL, " .
-            "ap_paterno VARCHAR(100) NOT NULL, " .
-            "ap_materno VARCHAR(100) NOT NULL, " .
-            "fechaNa DATE NOT NULL, " .
-            "direccion VARCHAR(150) NOT NULL" .
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
+        try {
+            $cols = $this->pdo->query("SHOW COLUMNS FROM DOCENTES LIKE 'calificacion'")->fetchAll();
+            if (empty($cols)) {
+                $this->pdo->exec("ALTER TABLE DOCENTES ADD calificacion DECIMAL(3,1) DEFAULT 5.0");
+            }
+        } catch (Throwable $e) {}
 
-        $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS buzon (" .
-            "id_buzon INT AUTO_INCREMENT PRIMARY KEY, " .
-            "no_leidos INT NOT NULL DEFAULT 0" .
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
-
-        $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS docentes (" .
-            "id_docente INT AUTO_INCREMENT PRIMARY KEY, " .
-            "id_persona INT NOT NULL, " .
-            "cod_docente VARCHAR(20) NOT NULL UNIQUE, " .
-            "tipo_contrato VARCHAR(50) NOT NULL, " .
-            "es_activo TINYINT(1) NOT NULL DEFAULT 1, " .
-            "grado_academico VARCHAR(100) NOT NULL, " .
-            "especialidad VARCHAR(150) NOT NULL, " .
-            "id_buzon INT NOT NULL, " .
-            "nombre_completo VARCHAR(150) NOT NULL, " .
-            "fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP" .
-            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
-
-        $this->pdo->exec(
-            "ALTER TABLE docentes ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(150) NOT NULL DEFAULT ''"
-        );
-        $this->pdo->exec(
-            "ALTER TABLE docentes ADD COLUMN IF NOT EXISTS fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        );
-        $this->pdo->exec(
-            "ALTER TABLE docentes ADD COLUMN IF NOT EXISTS calificacion DECIMAL(3,1) DEFAULT 5.0"
-        );
-        $this->pdo->exec(
-            "ALTER TABLE docentes ADD COLUMN IF NOT EXISTS observaciones TEXT NULL"
-        );
+        try {
+            $cols = $this->pdo->query("SHOW COLUMNS FROM DOCENTES LIKE 'observaciones'")->fetchAll();
+            if (empty($cols)) {
+                $this->pdo->exec("ALTER TABLE DOCENTES ADD observaciones TEXT NULL");
+            }
+        } catch (Throwable $e) {}
     }
 
+    /**
+     * Obtiene la lista completa de docentes con su información personal y asignación de cursos.
+     */
     public function getAll(): array
     {
-        $stmt = $this->pdo->query(
-            "SELECT d.id_docente, d.id_persona, d.cod_docente, d.tipo_contrato, d.es_activo, d.grado_academico, d.especialidad, d.id_buzon, " .
-            "COALESCE(NULLIF(TRIM(d.nombre_completo), ''), TRIM(CONCAT(p.nombre, ' ', COALESCE(p.ap_paterno, ''), ' ', COALESCE(p.ap_materno, '')))) AS nombre_completo, " .
-            "d.fecha_registro, d.calificacion, d.observaciones, " .
-            "p.dni, p.nombre, p.ap_paterno, p.ap_materno, p.fechaNa, p.direccion AS email, " .
-            "GROUP_CONCAT(DISTINCT c.nombre SEPARATOR ', ') AS cursos_a_cargo " .
-            "FROM docentes d " .
-            "LEFT JOIN personas p ON d.id_persona = p.id_persona " .
-            "LEFT JOIN asignacion_curso ac ON ac.id_docente = d.id_docente " .
-            "LEFT JOIN grado_curso gc ON gc.id_gradoCurso = ac.id_gradoCurso " .
-            "LEFT JOIN curso c ON c.id_curso = gc.id_curso " .
-            "GROUP BY d.id_docente " .
-            "ORDER BY d.id_docente DESC"
-        );
+        $sql = "SELECT 
+                    d.id_docente, 
+                    d.id_persona, 
+                    d.cod_docente, 
+                    d.tipo_contrato, 
+                    d.es_activo, 
+                    d.grado_academico, 
+                    d.especialidad, 
+                    d.id_buzon,
+                    COALESCE(d.calificacion, 5.0) AS calificacion,
+                    d.observaciones,
+                    CONCAT(p.nombre, ' ', p.ap_paterno, ' ', p.ap_materno) AS nombre_completo,
+                    p.dni, 
+                    p.nombre, 
+                    p.ap_paterno, 
+                    p.ap_materno, 
+                    p.fechaNa, 
+                    p.direccion,
+                    ep.correo AS email,
+                    ep.telefono,
+                    GROUP_CONCAT(DISTINCT c.nombre SEPARATOR ', ') AS cursos_a_cargo
+                FROM DOCENTES d
+                INNER JOIN PERSONAS p ON d.id_persona = p.id_persona
+                LEFT JOIN EXTRA_PERSONA ep ON p.id_persona = ep.id_persona
+                LEFT JOIN ASIGNACION_CURSO ac ON ac.id_docente = d.id_docente
+                LEFT JOIN GRADO_CURSO gc ON gc.id_gradoCurso = ac.id_gradoCurso
+                LEFT JOIN CURSO c ON c.id_curso = gc.id_curso
+                GROUP BY d.id_docente
+                ORDER BY d.id_docente DESC";
+
+        $stmt = $this->pdo->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Crea un nuevo docente registrando la persona, extras, buzón, docente, credenciales y rol.
+     */
     public function create(array $data): array
     {
-        $dni = trim((string)($data['dni'] ?? ''));
-        $nombre = trim((string)($data['nombre'] ?? ''));
+        $dni       = trim((string)($data['dni'] ?? ''));
+        $nombre    = trim((string)($data['nombre'] ?? ''));
         $apPaterno = trim((string)($data['ap_paterno'] ?? ''));
         $apMaterno = trim((string)($data['ap_materno'] ?? ''));
-        $fechaNa = trim((string)($data['fechaNa'] ?? ''));
+        $fechaNa   = trim((string)($data['fechaNa'] ?? ''));
         $direccion = trim((string)($data['direccion'] ?? ''));
+        $correo    = trim((string)($data['correo'] ?? $data['direccion'] ?? ''));
+        $telefono  = trim((string)($data['telefono'] ?? '900000000'));
 
-        $tipoContrato = trim((string)($data['tipo_contrato'] ?? ''));
-        $gradoAcademico = trim((string)($data['grado_academico'] ?? ''));
-        $especialidad = trim((string)($data['especialidad'] ?? ''));
-        $esActivo = !empty($data['es_activo']);
+        $tipoContrato   = trim((string)($data['tipo_contrato'] ?? 'Nombrado'));
+        $gradoAcademico = trim((string)($data['grado_academico'] ?? 'Licenciado'));
+        $especialidad   = trim((string)($data['especialidad'] ?? 'Educación'));
+        $esActivo       = !empty($data['es_activo']);
 
-        $nombreCompleto = trim((string)($data['nombre_completo'] ?? ''));
-        if ($nombreCompleto === '' && ($nombre !== '' || $apPaterno !== '' || $apMaterno !== '')) {
-            $nombreCompleto = trim("$nombre $apPaterno $apMaterno");
-        }
-
-        if ($dni === '' || $nombre === '' || $apPaterno === '' || $apMaterno === '' || $fechaNa === '' || $direccion === '' || $nombreCompleto === '' || $tipoContrato === '' || $gradoAcademico === '' || $especialidad === '') {
-            throw new InvalidArgumentException('Complete todos los campos obligatorios de la Persona Natural y del Docente.');
+        if ($dni === '' || $nombre === '' || $apPaterno === '' || $apMaterno === '' || $fechaNa === '') {
+            throw new InvalidArgumentException('Complete todos los campos obligatorios del docente (DNI, Nombres, Apellidos, Fecha Nacimiento).');
         }
 
         $this->pdo->beginTransaction();
 
         try {
+            // 1. Generar código de docente automático (DOC-000X)
             $codeStmt = $this->pdo->query(
-                "SELECT cod_docente FROM docentes WHERE cod_docente LIKE 'DOC%' ORDER BY CAST(SUBSTRING(cod_docente, 4) AS UNSIGNED) DESC LIMIT 1"
+                "SELECT cod_docente FROM DOCENTES WHERE cod_docente LIKE 'DOC%' ORDER BY id_docente DESC LIMIT 1"
             );
             $lastCodeRow = $codeStmt->fetch(PDO::FETCH_ASSOC);
             $nextNumber = 1;
 
             if ($lastCodeRow && !empty($lastCodeRow['cod_docente'])) {
-                $lastNumber = (int)substr($lastCodeRow['cod_docente'], 3);
-                $nextNumber = $lastNumber + 1;
+                $numPart = preg_replace('/[^0-9]/', '', $lastCodeRow['cod_docente']);
+                if (!empty($numPart)) {
+                    $nextNumber = (int)$numPart + 1;
+                }
             }
 
-            $codDocente = 'DOC' . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
+            $codDocente = 'DOC-' . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
 
+            // 2. Insertar PERSONAS
             $personaStmt = $this->pdo->prepare(
-                "INSERT INTO personas (dni, nombre, ap_paterno, ap_materno, fechaNa, direccion) VALUES (?, ?, ?, ?, ?, ?)"
+                "INSERT INTO PERSONAS (dni, nombre, ap_paterno, ap_materno, fechaNa, direccion) VALUES (?, ?, ?, ?, ?, ?)"
             );
-            $personaStmt->execute([
-                $dni,
-                $nombre,
-                $apPaterno,
-                $apMaterno,
-                $fechaNa,
-                $direccion
-            ]);
+            $personaStmt->execute([$dni, $nombre, $apPaterno, $apMaterno, $fechaNa, $direccion]);
             $idPersona = (int)$this->pdo->lastInsertId();
 
-            $buzonStmt = $this->pdo->prepare("INSERT INTO buzon (no_leidos) VALUES (?)");
-            $buzonStmt->execute([0]);
+            // 3. Insertar EXTRA_PERSONA
+            $extraStmt = $this->pdo->prepare(
+                "INSERT INTO EXTRA_PERSONA (id_persona, telefono, correo) VALUES (?, ?, ?)"
+            );
+            $extraStmt->execute([$idPersona, $telefono, $correo]);
+
+            // 4. Crear BUZON
+            $buzonStmt = $this->pdo->prepare("INSERT INTO BUZON (no_leidos) VALUES (0)");
+            $buzonStmt->execute();
             $idBuzon = (int)$this->pdo->lastInsertId();
 
-            $stmt = $this->pdo->prepare(
-                "INSERT INTO docentes (id_persona, cod_docente, tipo_contrato, es_activo, grado_academico, especialidad, id_buzon, nombre_completo) " .
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            // 5. Insertar DOCENTES
+            $docenteStmt = $this->pdo->prepare(
+                "INSERT INTO DOCENTES (id_persona, cod_docente, tipo_contrato, es_activo, grado_academico, especialidad, id_buzon, calificacion) " .
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 5.0)"
             );
-            $stmt->execute([
+            $docenteStmt->execute([
                 $idPersona,
                 $codDocente,
                 $tipoContrato,
                 $esActivo ? 1 : 0,
                 $gradoAcademico,
                 $especialidad,
-                $idBuzon,
-                $nombreCompleto
+                $idBuzon
             ]);
+            $idDocente = (int)$this->pdo->lastInsertId();
 
-            $insertedId = (int)$this->pdo->lastInsertId();
+            // 6. Crear CREDENCIALES de acceso (usuario por defecto: DNI o correo)
+            $username = 'docente.' . strtolower($apPaterno) . $idDocente;
+            $hashPass = password_hash('docente123', PASSWORD_BCRYPT);
+
+            $credStmt = $this->pdo->prepare(
+                "INSERT INTO CREDENCIALES (username, password_hash, id_persona) VALUES (?, ?, ?)"
+            );
+            $credStmt->execute([$username, $hashPass, $idPersona]);
+            $idCred = (int)$this->pdo->lastInsertId();
+
+            // 7. Asignar ROL 'Docente'
+            $rolStmt = $this->pdo->query("SELECT id_rol FROM ROL WHERE nombre = 'Docente' LIMIT 1");
+            $idRol = $rolStmt->fetchColumn() ?: 2;
+
+            $userRolStmt = $this->pdo->prepare("INSERT INTO USUARIO_ROL (id_credenciales, id_rol) VALUES (?, ?)");
+            $userRolStmt->execute([$idCred, $idRol]);
+
             $this->pdo->commit();
 
-            $recordStmt = $this->pdo->prepare(
-                "SELECT d.id_docente, d.id_persona, d.cod_docente, d.tipo_contrato, d.es_activo, d.grado_academico, d.especialidad, d.id_buzon, d.nombre_completo, d.fecha_registro, " .
-                "p.dni, p.nombre, p.ap_paterno, p.ap_materno, p.fechaNa, p.direccion AS email " .
-                "FROM docentes d " .
-                "LEFT JOIN personas p ON d.id_persona = p.id_persona " .
-                "WHERE d.id_docente = ?"
-            );
-            $recordStmt->execute([$insertedId]);
-
-            $record = $recordStmt->fetch(PDO::FETCH_ASSOC);
-            return $record ?: [];
+            return [
+                'id_docente'      => $idDocente,
+                'cod_docente'     => $codDocente,
+                'nombre_completo' => "$nombre $apPaterno $apMaterno",
+                'dni'             => $dni,
+                'tipo_contrato'   => $tipoContrato,
+                'grado_academico' => $gradoAcademico,
+                'especialidad'    => $especialidad,
+                'es_activo'       => $esActivo
+            ];
         } catch (Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
     }
 
+    /**
+     * Cambia el estado activo/inactivo de un docente.
+     */
     public function updateStatus(int $idDocente, bool $esActivo): array
     {
-        $stmt = $this->pdo->prepare("UPDATE docentes SET es_activo = ? WHERE id_docente = ?");
+        $stmt = $this->pdo->prepare("UPDATE DOCENTES SET es_activo = ? WHERE id_docente = ?");
         $stmt->execute([$esActivo ? 1 : 0, $idDocente]);
 
         return [
             'id_docente' => $idDocente,
-            'es_activo' => $esActivo
+            'es_activo'  => $esActivo
         ];
     }
 
+    /**
+     * Califica el desempeño de un docente.
+     */
     public function rateDocente(int $idDocente, float $calificacion, string $observaciones): array
     {
-        $stmt = $this->pdo->prepare("UPDATE docentes SET calificacion = ?, observaciones = ? WHERE id_docente = ?");
+        $stmt = $this->pdo->prepare("UPDATE DOCENTES SET calificacion = ?, observaciones = ? WHERE id_docente = ?");
         $stmt->execute([$calificacion, $observaciones, $idDocente]);
 
         return [
-            'id_docente' => $idDocente,
-            'calificacion' => $calificacion,
+            'id_docente'    => $idDocente,
+            'calificacion'  => $calificacion,
             'observaciones' => $observaciones
         ];
     }
