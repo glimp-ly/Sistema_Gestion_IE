@@ -5,7 +5,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../core/config.php';
 require_once __DIR__ . '/../core/security.php';
 Security::verificarRol(['Docente', 'docente']);
-Security::verificarRol(['Docente']);
 
 $pageTitle = "Portal Docente - IEP Corazón de Jesús College";
 require_once "views/components/head.php";
