@@ -1,4 +1,12 @@
 <?php
+
+session_start();
+
+require_once "core/config.php";
+require_once "core/database.php";
+require_once "core/router.php";
+require_once "core/security.php";
+
 /**
  * Enrutador / Controlador Frontal (Front Controller) para la I.E.P. Colegio Corazón de Jesús.
  * 
@@ -26,7 +34,7 @@ $path = ltrim($path, '/');
 // los html se deben cambiar a php puro, ya que ejecutan codigo php desde ellos
 // 4. Ruta por defecto: Si la ruta está vacía o apunta a index.php, redirige a la vista principal (index.html).
 if ($path === '' || $path === 'index.php') {
-    $path = 'index.html';
+    $path = 'auth/login.php'; // Cambiado a login.php para que sea la página de inicio de sesión
 }
 
 // 5. Normalizar rutas relativas que por error busquen carpetas de recursos dentro de la carpeta 'views/'
@@ -66,7 +74,7 @@ if (preg_match('/^(css|js|docs)\//', $path)) {
 
 // B. Servir vistas HTML desde el directorio de vistas (/views)
 // Definimos una lista de vistas HTML permitidas en nuestra aplicación.
-$views = ['index.html', 'login.html', 'docente.html', 'admin.html'];
+$views = ['index.html', 'auth/login.php', 'docente.php', 'admin.php'];
 if (in_array($path, $views)) {
     $file = __DIR__ . '/views/' . $path;
     if (file_exists($file)) {

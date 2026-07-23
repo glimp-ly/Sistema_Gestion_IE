@@ -7,9 +7,9 @@
   
   <!-- Hojas de estilo CSS del sistema -->
   <!-- variables.css define los colores corporativos, tamaños y tokens de diseño globales -->
-  <link rel="stylesheet" href="../public/css/variables.css">
+  <link rel="stylesheet" href="public/css/variables.css">
   <!-- login.css define los estilos específicos del formulario, animaciones y contenedor de login -->
-  <link rel="stylesheet" href="../public/css/login.css">
+  <link rel="stylesheet" href="public/css/login.css">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
   <div class="login-container">
     <div class="login-card">
       <div class="login-logo">
-        <img src="../public/img/logo_ie.jpg" alt="Logo Sagrado Corazón de Jesús" width="80rem" height="80rem">
+        <img src="public/img/logo_ie.jpg" alt="Logo Sagrado Corazón de Jesús" width="80rem" height="80rem">
       </div>
 
       <!-- Cabecera del formulario con el nombre del colegio -->
