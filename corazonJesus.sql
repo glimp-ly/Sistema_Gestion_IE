@@ -3,10 +3,10 @@
 -- Script unificado (script_createBD + correcciones RBAC)
 -- =====================================================================
 
-CREATE DATABASE IF NOT EXISTS `colegio_db`
+CREATE DATABASE IF NOT EXISTS `colegio_DB`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE `colegio_db`;
+USE `colegio_DB`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
