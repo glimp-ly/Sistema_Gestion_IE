@@ -21,11 +21,11 @@
   }
 
   function getDocentesApiUrl() {
-    try {
-      return new URL('../public/api/docentes.php', window.location.href).toString();
-    } catch (error) {
-      return '../public/api/docentes.php';
-    }
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/docentes.php';
+  }
+
+  function getCursosApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/cursos.php';
   }
 
   /* ==========================================================================
@@ -793,7 +793,7 @@
     }
 
     function loadData() {
-      fetch('../public/api/cursos.php', {
+      fetch(getCursosApiUrl(), {
         method: 'GET',
         cache: 'no-store',
         credentials: 'same-origin'
@@ -824,7 +824,7 @@
         año: document.getElementById('curso-anio').value
       };
 
-      fetch('../public/api/cursos.php', {
+      fetch(getCursosApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -884,7 +884,7 @@
         fecha_finAsig: document.getElementById('asignacion-fecha-fin').value
       };
 
-      fetch('../public/api/cursos.php', {
+      fetch(getCursosApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -1217,11 +1217,7 @@
      6. GESTIÓN ECONÓMICA: DASHBOARD VISUAL REACTIVO CON AJUSTES
      ========================================================================== */
   function getEconomiaApiUrl() {
-    try {
-      return new URL('../public/api/economia.php', window.location.href).toString();
-    } catch (error) {
-      return '../public/api/economia.php';
-    }
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/economia.php';
   }
 
   /* ==========================================================================

@@ -61,7 +61,9 @@ class DocenteModel
     public function getAll(): array
     {
         $stmt = $this->pdo->query(
-            "SELECT d.id_docente, d.id_persona, d.cod_docente, d.tipo_contrato, d.es_activo, d.grado_academico, d.especialidad, d.id_buzon, d.nombre_completo, d.fecha_registro, d.calificacion, d.observaciones, " .
+            "SELECT d.id_docente, d.id_persona, d.cod_docente, d.tipo_contrato, d.es_activo, d.grado_academico, d.especialidad, d.id_buzon, " .
+            "COALESCE(NULLIF(TRIM(d.nombre_completo), ''), TRIM(CONCAT(p.nombre, ' ', COALESCE(p.ap_paterno, ''), ' ', COALESCE(p.ap_materno, '')))) AS nombre_completo, " .
+            "d.fecha_registro, d.calificacion, d.observaciones, " .
             "p.dni, p.nombre, p.ap_paterno, p.ap_materno, p.fechaNa, p.direccion AS email, " .
             "GROUP_CONCAT(DISTINCT c.nombre SEPARATOR ', ') AS cursos_a_cargo " .
             "FROM docentes d " .
