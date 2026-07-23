@@ -10,7 +10,7 @@
         public static function connection() {
             if (self::$instance === null) {
                 $host     = getenv('DB_HOST') ?: "localhost";
-                $db_name  = getenv('DB_NAME') ?: "colegio_DB";
+                $db_name  = getenv('DB_NAME') ?: "colegio_db";
                 $username = getenv('DB_USER') ?: "root";
                 $password = getenv('DB_PASS') !== false ? getenv('DB_PASS') : "";
 

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * =====================================================================
  * MODELO: DocenteModel.php
@@ -23,14 +24,16 @@ class DocenteModel
             if (empty($cols)) {
                 $this->pdo->exec("ALTER TABLE DOCENTES ADD calificacion DECIMAL(3,1) DEFAULT 5.0");
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
 
         try {
             $cols = $this->pdo->query("SHOW COLUMNS FROM DOCENTES LIKE 'observaciones'")->fetchAll();
             if (empty($cols)) {
                 $this->pdo->exec("ALTER TABLE DOCENTES ADD observaciones TEXT NULL");
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+        }
     }
 
     /**
@@ -135,7 +138,7 @@ class DocenteModel
             // 5. Insertar DOCENTES
             $docenteStmt = $this->pdo->prepare(
                 "INSERT INTO DOCENTES (id_persona, cod_docente, tipo_contrato, es_activo, grado_academico, especialidad, id_buzon, calificacion) " .
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 5.0)"
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 5.0)"
             );
             $docenteStmt->execute([
                 $idPersona,
