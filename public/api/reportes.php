@@ -1,4 +1,5 @@
 <?php
+session_start();
 /**
  * Endpoint API: Reportes Generales
  * URI: /public/api/reportes.php
@@ -32,11 +33,6 @@ function responseJson($success, $message, $data = null): void
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(204);
     exit;
-}
-
-// Iniciar sesión para obtener datos del usuario logueado
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
 }
 
 try {

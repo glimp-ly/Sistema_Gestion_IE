@@ -1,11 +1,9 @@
 <?php
-session_start();
-require_once __DIR__ . '/../../controllers/CursoController.php';
-require_once __DIR__ . '/../../core/security.php';
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../../controllers/CursoController.php';
+require_once __DIR__ . '/../../core/security.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -41,6 +39,7 @@ if (empty($_SESSION['usuario_id'])) {
 
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $query   = $_GET;
     $input = file_get_contents('php://input');
     $payload = [];
 
@@ -66,7 +65,7 @@ try {
     }
 
     $controller = new CursoController();
-    $result = $controller->handleRequest($method, $payload);
+    $result = $controller->handleRequest($method, $payload, $query);
     responseJson($result['success'], $result['message'], $result['data']);
 } catch (Throwable $e) {
     http_response_code(500);
