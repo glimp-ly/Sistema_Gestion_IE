@@ -1398,7 +1398,8 @@
     function loadFilterOptions(levelSelect, gradeSelect, callback) {
       fetch(getApiUrl('public/api/reportes.php?tipo=filtros'), {
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        cache: 'no-store'
+        cache: 'no-store',
+        credentials: 'include'
       })
         .then(r => r.json())
         .then(res => {
