@@ -20,7 +20,7 @@ class DocenteModel
     public function ensureTable(): void
     {
         $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS personas (" .
+            "CREATE TABLE IF NOT EXISTS PERSONAS (" .
             "id_persona INT AUTO_INCREMENT PRIMARY KEY, " .
             "dni VARCHAR(20) NOT NULL, " .
             "nombre VARCHAR(100) NOT NULL, " .
@@ -32,14 +32,14 @@ class DocenteModel
         );
 
         $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS buzon (" .
+            "CREATE TABLE IF NOT EXISTS BUZON (" .
             "id_buzon INT AUTO_INCREMENT PRIMARY KEY, " .
             "no_leidos INT NOT NULL DEFAULT 0" .
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
         $this->pdo->exec(
-            "CREATE TABLE IF NOT EXISTS docentes (" .
+            "CREATE TABLE IF NOT EXISTS DOCENTES (" .
             "id_docente INT AUTO_INCREMENT PRIMARY KEY, " .
             "id_persona INT NOT NULL, " .
             "cod_docente VARCHAR(20) NOT NULL UNIQUE, " .
@@ -48,13 +48,12 @@ class DocenteModel
             "grado_academico VARCHAR(100) NOT NULL, " .
             "especialidad VARCHAR(150) NOT NULL, " .
             "id_buzon INT NOT NULL, " .
-            "nombre_completo VARCHAR(150) NOT NULL, " .
+            "calificacion DECIMAL(3,1) DEFAULT 5.0, " .
+            "observaciones TEXT NULL, " .
             "fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP" .
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
-        // Las credenciales se vinculan a la misma persona del docente.  Así se
-        // evita duplicar personas y el inicio de sesión puede identificarlo.
         $this->pdo->exec(
             "CREATE TABLE IF NOT EXISTS CREDENCIALES (" .
             "id_credenciales INT AUTO_INCREMENT PRIMARY KEY, " .
@@ -80,10 +79,10 @@ class DocenteModel
 
         // Ensure extra columns exist (ignore errors if not supported or already present)
         $addColumnQueries = [
-            "ALTER TABLE docentes ADD COLUMN nombre_completo VARCHAR(150) NOT NULL DEFAULT ''",
-            "ALTER TABLE docentes ADD COLUMN fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            "ALTER TABLE docentes ADD COLUMN calificacion DECIMAL(3,1) DEFAULT 5.0",
-            "ALTER TABLE docentes ADD COLUMN observaciones TEXT NULL",
+            "ALTER TABLE DOCENTES ADD COLUMN nombre_completo VARCHAR(150) NOT NULL DEFAULT ''",
+            "ALTER TABLE DOCENTES ADD COLUMN fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "ALTER TABLE DOCENTES ADD COLUMN calificacion DECIMAL(3,1) DEFAULT 5.0",
+            "ALTER TABLE DOCENTES ADD COLUMN observaciones TEXT NULL",
         ];
         foreach ($addColumnQueries as $sql) {
             try { $this->pdo->exec($sql); } catch (Throwable $e) { /* column may already exist */ }
@@ -135,8 +134,8 @@ class DocenteModel
             "SELECT d.id_docente, d.cod_docente, " .
             "TRIM(CONCAT(p.nombre, ' ', p.ap_paterno, ' ', p.ap_materno)) AS nombre_completo, " .
             "c.username, r.nombre AS rol " .
-            "FROM docentes d " .
-            "INNER JOIN personas p ON p.id_persona = d.id_persona " .
+            "FROM DOCENTES d " .
+            "INNER JOIN PERSONAS p ON p.id_persona = d.id_persona " .
             "INNER JOIN CREDENCIALES c ON c.id_persona = p.id_persona " .
             "INNER JOIN USUARIO_ROL ur ON ur.id_credenciales = c.id_credenciales " .
             "INNER JOIN ROL r ON r.id_rol = ur.id_rol " .
@@ -145,8 +144,7 @@ class DocenteModel
         );
         $credentials = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($credentials as &$credential) {
-            // La clave inicial es igual al usuario. El hash nunca se expone.
-            $credential['password_temporal'] = $credential['username'];
+            $credential['password_temporal'] = 'docente123';
         }
         unset($credential);
         return $credentials;

@@ -43,7 +43,7 @@ class EconomiaModel
         $stmt = $this->pdo->query("SELECT * FROM configuracion_economica ORDER BY id ASC LIMIT 1");
         $config = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-        $docentStmt = $this->pdo->query("SELECT COUNT(*) AS total FROM docentes WHERE es_activo = 1");
+        $docentStmt = $this->pdo->query("SELECT COUNT(*) AS total FROM DOCENTES WHERE es_activo = 1");
         $docentRow = $docentStmt->fetch(PDO::FETCH_ASSOC);
         $numDocentes = (int)($docentRow['total'] ?? 0);
         if ($numDocentes <= 0) {

@@ -14,7 +14,7 @@ class UsuarioController
 
     public function __construct()
     {
-        Security::verificarRol(['Administrador']);
+        Security::verificarRol(['Director', 'Administrador']);
         $this->db = new UsuarioModel();
         $this->roles = new RolModel();
         $this->validacion = new ValController();

@@ -61,11 +61,11 @@ class CursoModel
         $stmt = $this->pdo->prepare(
             "SELECT DISTINCT c.id_curso, c.nombre, c.descripcion, g.nombre AS nombre_grado, g.seccion " .
             "FROM CREDENCIALES cr " .
-            "INNER JOIN docentes d ON d.id_persona = cr.id_persona " .
-            "INNER JOIN asignacion_curso ac ON ac.id_docente = d.id_docente " .
-            "INNER JOIN grado_curso gc ON gc.id_gradoCurso = ac.id_gradoCurso " .
-            "INNER JOIN curso c ON c.id_curso = gc.id_curso " .
-            "INNER JOIN grado g ON g.id_grado = gc.id_grado " .
+            "INNER JOIN DOCENTES d ON d.id_persona = cr.id_persona " .
+            "INNER JOIN ASIGNACION_CURSO ac ON ac.id_docente = d.id_docente " .
+            "INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = ac.id_gradoCurso " .
+            "INNER JOIN CURSO c ON c.id_curso = gc.id_curso " .
+            "INNER JOIN GRADO g ON g.id_grado = gc.id_grado " .
             "WHERE cr.id_credenciales = ? AND d.es_activo = 1 " .
             "AND (ac.fecha_finAsig IS NULL OR ac.fecha_finAsig >= CURDATE()) " .
             "ORDER BY c.nombre, g.nombre, g.seccion"
@@ -79,7 +79,7 @@ class CursoModel
         $nombre      = trim((string)($data['nombre'] ?? ''));
         $descripcion = trim((string)($data['descripcion'] ?? ''));
         $idGrado     = (int)($data['id_grado'] ?? 0);
-        $anio        = (int)($data['año'] ?? date('Y'));
+        $anio        = (int)($data['anio'] ?? date('Y'));
 
         if ($nombre === '' || $descripcion === '') {
             throw new InvalidArgumentException('Complete los datos del curso.');
@@ -94,7 +94,7 @@ class CursoModel
             $cursoStmt->execute([$nombre, $descripcion]);
             $idCurso = (int)$this->pdo->lastInsertId();
 
-            $gradoCursoStmt = $this->pdo->prepare("INSERT INTO GRADO_CURSO (id_curso, id_grado, año) VALUES (?, ?, ?)");
+            $gradoCursoStmt = $this->pdo->prepare("INSERT INTO GRADO_CURSO (id_curso, id_grado, anio) VALUES (?, ?, ?)");
             $gradoCursoStmt->execute([$idCurso, $idGradoReal, $anio]);
             $idGradoCurso = (int)$this->pdo->lastInsertId();
 

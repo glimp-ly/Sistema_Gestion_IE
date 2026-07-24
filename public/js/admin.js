@@ -28,6 +28,15 @@
     return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/cursos.php';
   }
 
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  function csrfHeaders() {
+    return { 'X-CSRF-Token': getCsrfToken() };
+  }
+
   /* ==========================================================================
      1. INFORMACIÓN PERSONAL
      ========================================================================== */
@@ -345,7 +354,7 @@
 
       fetch(getDocentesApiUrl(), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({
           action: 'rate',
           id_docente: teacherId,
@@ -505,19 +514,6 @@
     const credentialsCard = document.getElementById('teacher-credentials-card');
     const credentialsTbody = document.getElementById('teacher-credentials-tbody');
 
-    fetch(getDocentesApiUrl(), {
-      method: 'GET',
-      cache: 'no-store',
-      credentials: 'same-origin'
-    })
-      .then(response => response.text())
-      .then(text => {
-        console.log('Prueba de conexión al API:', text.slice(0, 200));
-      })
-      .catch(error => {
-        console.error('Error de conexión al API:', error);
-      });
-
     function renderRegisteredTeachers() {
       fetch(getDocentesApiUrl(), {
         method: 'GET',
@@ -599,7 +595,7 @@
       const currentState = btn.getAttribute('data-active') === '1';
       fetch(getDocentesApiUrl(), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ id_docente: idDocente, es_activo: !currentState }),
         cache: 'no-store',
         credentials: 'same-origin'
@@ -637,7 +633,8 @@
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          ...csrfHeaders()
         },
         body: formData.toString(),
         cache: 'no-store',
@@ -876,7 +873,7 @@
         nombre: document.getElementById('curso-nombre').value.trim(),
         descripcion: document.getElementById('curso-descripcion').value.trim(),
         id_grado: document.getElementById('curso-grado').value,
-        año: document.getElementById('curso-anio').value
+        anio: document.getElementById('curso-anio').value
       };
 
       fetch(getCursosApiUrl(), {
@@ -884,7 +881,8 @@
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          ...csrfHeaders()
         },
         body: new URLSearchParams(payload).toString(),
         cache: 'no-store',
@@ -944,7 +942,8 @@
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          ...csrfHeaders()
         },
         body: new URLSearchParams(payload).toString(),
         cache: 'no-store',
@@ -1683,7 +1682,7 @@
 
       fetch(getEconomiaApiUrl(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify(payload),
         cache: 'no-store',
         credentials: 'same-origin'

@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS `GRADO_CURSO` (
 	`id_gradoCurso` INT NOT NULL AUTO_INCREMENT,
 	`id_curso` INT NOT NULL,
 	`id_grado` INT NOT NULL,
-	`año` YEAR NOT NULL,
+	`anio` YEAR NOT NULL,
 	PRIMARY KEY (`id_gradoCurso`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -406,7 +406,7 @@ CREATE TABLE IF NOT EXISTS `DATOS_IE` (
 	`ruc` VARCHAR(255) NOT NULL,
 	`direccion` VARCHAR(255) NOT NULL,
 	`logo` BLOB,
-	`año` YEAR NOT NULL,
+	`anio` YEAR NOT NULL,
 	PRIMARY KEY (`id_ie`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

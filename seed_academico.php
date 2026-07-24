@@ -31,13 +31,80 @@ echo "=============================================================\n\n";
 
 try {
     $conn = Conexion::connection();
+
+    // FIX: Detect and repair corrupted `año` column name (mojibake: aÃ±o)
+    // Must run BEFORE beginTransaction() because DDL causes implicit COMMIT
+    try {
+        $cols = $conn->query("SHOW COLUMNS FROM GRADO_CURSO")->fetchAll(PDO::FETCH_COLUMN);
+        $hasCorrupted = false;
+        $hasAnio = false;
+        foreach ($cols as $col) {
+            if ($col === 'anio') $hasAnio = true;
+            if (strlen($col) > 3 && ord($col[1]) === 0xC3) $hasCorrupted = true;
+        }
+        if ($hasCorrupted && !$hasAnio) {
+            $conn->exec("SET FOREIGN_KEY_CHECKS=0");
+            $conn->exec("DROP TABLE IF EXISTS ASIGNACION_CURSO, SESION, ACTIVIDADES, GRADO_CURSO");
+            $conn->exec("
+                CREATE TABLE GRADO_CURSO (
+                    id_gradoCurso INT NOT NULL AUTO_INCREMENT,
+                    id_curso INT NOT NULL,
+                    id_grado INT NOT NULL,
+                    anio YEAR NOT NULL,
+                    PRIMARY KEY (id_gradoCurso)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $conn->exec("ALTER TABLE GRADO_CURSO ADD CONSTRAINT fk_gc_grado FOREIGN KEY (id_grado) REFERENCES GRADO(id_grado) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("ALTER TABLE GRADO_CURSO ADD CONSTRAINT fk_gc_curso FOREIGN KEY (id_curso) REFERENCES CURSO(id_curso) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("
+                CREATE TABLE IF NOT EXISTS SESION (
+                    id_sesion INT NOT NULL AUTO_INCREMENT,
+                    nombre VARCHAR(50) NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    id_gradoCurso INT NOT NULL,
+                    PRIMARY KEY (id_sesion)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $conn->exec("ALTER TABLE SESION ADD CONSTRAINT fk_sesion_gc FOREIGN KEY (id_gradoCurso) REFERENCES GRADO_CURSO(id_gradoCurso) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("
+                CREATE TABLE IF NOT EXISTS ACTIVIDADES (
+                    id_actividad INT NOT NULL AUTO_INCREMENT,
+                    nombre VARCHAR(100) NOT NULL,
+                    peso DECIMAL(5,2) NOT NULL,
+                    id_gradoCurso INT NOT NULL,
+                    PRIMARY KEY (id_actividad)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $conn->exec("ALTER TABLE ACTIVIDADES ADD CONSTRAINT fk_act_gc FOREIGN KEY (id_gradoCurso) REFERENCES GRADO_CURSO(id_gradoCurso) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("
+                CREATE TABLE IF NOT EXISTS ASIGNACION_CURSO (
+                    id_asignacionCurso INT NOT NULL AUTO_INCREMENT,
+                    id_docente INT NOT NULL,
+                    id_gradoCurso INT NOT NULL,
+                    dia_horario VARCHAR(10) NOT NULL,
+                    hora_inicio TIME NOT NULL,
+                    hora_fin TIME NOT NULL,
+                    fecha_asignacion DATE NOT NULL,
+                    fecha_finAsig DATE,
+                    PRIMARY KEY (id_asignacionCurso)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            $conn->exec("ALTER TABLE ASIGNACION_CURSO ADD CONSTRAINT fk_ac_docente FOREIGN KEY (id_docente) REFERENCES DOCENTES(id_docente) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("ALTER TABLE ASIGNACION_CURSO ADD CONSTRAINT fk_ac_gc FOREIGN KEY (id_gradoCurso) REFERENCES GRADO_CURSO(id_gradoCurso) ON UPDATE CASCADE ON DELETE RESTRICT");
+            $conn->exec("SET FOREIGN_KEY_CHECKS=1");
+            echo "   ✔ Columna 'año' corrupta detectada y reparada a 'anio'.\n\n";
+        }
+    } catch (Throwable $e) {
+        echo "   ⚠ No se pudo verificar columna anio: " . $e->getMessage() . "\n";
+    }
+
     $conn->beginTransaction();
 
     // -----------------------------------------------------------------
     // 1. ROLES BASE
     // -----------------------------------------------------------------
     echo "1. Creando / verificando roles base...\n";
-    $rolesDefinidos = ['Director', 'Docente'];
+    $rolesDefinidos = ['Director', 'Administrador', 'Docente', 'Contador'];
     $rolesIds = [];
 
     foreach ($rolesDefinidos as $rNombre) {
@@ -52,7 +119,7 @@ try {
             $rolesIds[$rNombre] = $conn->lastInsertId();
         }
     }
-    echo "   ✔ Roles listos: Director (ID {$rolesIds['Director']}), Docente (ID {$rolesIds['Docente']}).\n\n";
+    echo "   ✔ Roles listos: Director (ID {$rolesIds['Director']}), Administrador (ID {$rolesIds['Administrador']}), Docente (ID {$rolesIds['Docente']}), Contador (ID {$rolesIds['Contador']}).\n\n";
 
     // -----------------------------------------------------------------
     // 2. CREACIÓN DE USUARIOS BASE (DIRECTOR Y DOCENTES)
@@ -148,6 +215,94 @@ try {
             'grado_academico' => 'Ingeniero Biológico / Docente',
             'especialidad'    => 'Ciencia, Tecnología y Ambiente'
         ],
+        [
+            'rol'             => 'Docente',
+            'username'        => 'prof.historia',
+            'password'        => 'historia123',
+            'dni'             => '70000007',
+            'nombre'          => 'Roberto',
+            'ap_paterno'      => 'Sánchez',
+            'ap_materno'      => 'Paredes',
+            'fechaNa'         => '1987-12-01',
+            'direccion'       => 'Calle Las Camelias 450, Surco',
+            'telefono'        => '967890123',
+            'correo'          => 'r.sanchez@corazonjesus.edu.pe',
+            'tipo'            => 'docente',
+            'cod_docente'     => 'DOC-0005',
+            'tipo_contrato'   => 'Tiempo Completo',
+            'grado_academico' => 'Licenciado en Historia y Geografía',
+            'especialidad'    => 'Ciencias Sociales'
+        ],
+        [
+            'rol'             => 'Docente',
+            'username'        => 'prof.arte',
+            'password'        => 'arte123',
+            'dni'             => '70000008',
+            'nombre'          => 'Diana',
+            'ap_paterno'      => 'Torres',
+            'ap_materno'      => 'Quiroz',
+            'fechaNa'         => '1991-04-20',
+            'direccion'       => 'Jr. Cusco 210, Breña',
+            'telefono'        => '978901234',
+            'correo'          => 'd.torres@corazonjesus.edu.pe',
+            'tipo'            => 'docente',
+            'cod_docente'     => 'DOC-0006',
+            'tipo_contrato'   => 'Contratado',
+            'grado_academico' => 'Licenciada en Arte y Diseño',
+            'especialidad'    => 'Arte y Visual'
+        ],
+        [
+            'rol'             => 'Docente',
+            'username'        => 'prof.edfisica',
+            'password'        => 'edfisica123',
+            'dni'             => '70000009',
+            'nombre'          => 'Manuel',
+            'ap_paterno'      => 'Castillo',
+            'ap_materno'      => 'Ramos',
+            'fechaNa'         => '1986-06-15',
+            'direccion'       => 'Av. Angamos 800, Surquillo',
+            'telefono'        => '989012345',
+            'correo'          => 'm.castillo@corazonjesus.edu.pe',
+            'tipo'            => 'docente',
+            'cod_docente'     => 'DOC-0007',
+            'tipo_contrato'   => 'Tiempo Completo',
+            'grado_academico' => 'Licenciado en Educación Física',
+            'especialidad'    => 'Deporte y Recreación'
+        ],
+        [
+            'rol'             => 'Docente',
+            'username'        => 'prof.computacion',
+            'password'        => 'computacion123',
+            'dni'             => '70000010',
+            'nombre'          => 'Laura',
+            'ap_paterno'      => 'Ramos',
+            'ap_materno'      => 'Huamán',
+            'fechaNa'         => '1993-11-28',
+            'direccion'       => 'Calle Aviación 333, San Borja',
+            'telefono'        => '900123456',
+            'correo'          => 'l.ramos@corazonjesus.edu.pe',
+            'tipo'            => 'docente',
+            'cod_docente'     => 'DOC-0008',
+            'tipo_contrato'   => 'Contratado',
+            'grado_academico' => 'Ingeniera de Sistemas',
+            'especialidad'    => 'Computación e Informática'
+        ],
+        [
+            'rol'             => 'Contador',
+            'username'        => 'contador',
+            'password'        => 'contador123',
+            'dni'             => '70000006',
+            'nombre'          => 'Jorge',
+            'ap_paterno'      => 'Mendoza',
+            'ap_materno'      => 'Villa',
+            'fechaNa'         => '1984-09-12',
+            'direccion'       => 'Av. La Marina 2000, San Miguel',
+            'telefono'        => '956789012',
+            'correo'          => 'j.mendoza@corazonjesus.edu.pe',
+            'tipo'            => 'administrativo',
+            'grado_academico' => 'Contador Público',
+            'especialidad'    => 'Contabilidad y Finanzas'
+        ],
     ];
 
     $docentesIds = [];
@@ -158,54 +313,84 @@ try {
         $stmt->execute([':username' => $u['username']]);
         if ($stmt->fetch()) {
             echo "   • Usuario '{$u['username']}' ya existía, omitiendo inserción de credencial.\n";
+            // Still collect IDs for later use (assignments)
+            if ($u['tipo'] === 'docente') {
+                $stmtD = $conn->prepare("SELECT d.id_docente FROM DOCENTES d INNER JOIN PERSONAS p ON d.id_persona = p.id_persona WHERE p.dni = :dni LIMIT 1");
+                $stmtD->execute([':dni' => $u['dni']]);
+                $rowD = $stmtD->fetch(PDO::FETCH_ASSOC);
+                if ($rowD) {
+                    $docentesIds[$u['username']] = $rowD['id_docente'];
+                }
+            }
             continue;
         }
 
-        // Insertar PERSONAS
-        $stmt = $conn->prepare("
-            INSERT INTO PERSONAS (dni, nombre, ap_paterno, ap_materno, fechaNa, direccion)
-            VALUES (:dni, :nombre, :ap_paterno, :ap_materno, :fechaNa, :direccion)
-        ");
-        $stmt->execute([
-            ':dni'        => $u['dni'],
-            ':nombre'     => $u['nombre'],
-            ':ap_paterno' => $u['ap_paterno'],
-            ':ap_materno' => $u['ap_materno'],
-            ':fechaNa'    => $u['fechaNa'],
-            ':direccion'  => $u['direccion']
-        ]);
-        $idPersona = $conn->lastInsertId();
+        // Check if person already exists by DNI (idempotent re-run)
+        $stmt = $conn->prepare("SELECT id_persona FROM PERSONAS WHERE dni = :dni");
+        $stmt->execute([':dni' => $u['dni']]);
+        $existingPersona = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Insertar EXTRA_PERSONA
-        $stmt = $conn->prepare("INSERT INTO EXTRA_PERSONA (id_persona, telefono, correo) VALUES (:id, :tel, :correo)");
-        $stmt->execute([':id' => $idPersona, ':tel' => $u['telefono'], ':correo' => $u['correo']]);
-
-        // Crear BUZON
-        $stmt = $conn->prepare("INSERT INTO BUZON (no_leidos) VALUES (0)");
-        $stmt->execute();
-        $idBuzon = $conn->lastInsertId();
-
-        // Insertar en tabla de cargo específico
-        if ($u['tipo'] === 'administrativo') {
-            $stmt = $conn->prepare("
-                INSERT INTO ADMINISTRATIVO (id_persona, es_activo, grado_academico, especialidad, id_buzon)
-                VALUES (:id_persona, 1, :grado, :esp, :buzon)
-            ");
-            $stmt->execute([':id_persona' => $idPersona, ':grado' => $u['grado_academico'], ':esp' => $u['especialidad'], ':buzon' => $idBuzon]);
+        if ($existingPersona) {
+            $idPersona = $existingPersona['id_persona'];
         } else {
+            // Insertar PERSONAS
             $stmt = $conn->prepare("
-                INSERT INTO DOCENTES (id_persona, cod_docente, tipo_contrato, es_activo, grado_academico, especialidad, id_buzon)
-                VALUES (:id_persona, :cod, :contrato, 1, :grado, :esp, :buzon)
+                INSERT INTO PERSONAS (dni, nombre, ap_paterno, ap_materno, fechaNa, direccion)
+                VALUES (:dni, :nombre, :ap_paterno, :ap_materno, :fechaNa, :direccion)
             ");
             $stmt->execute([
-                ':id_persona' => $idPersona,
-                ':cod'        => $u['cod_docente'],
-                ':contrato'   => $u['tipo_contrato'],
-                ':grado'      => $u['grado_academico'],
-                ':esp'        => $u['especialidad'],
-                ':buzon'      => $idBuzon
+                ':dni'        => $u['dni'],
+                ':nombre'     => $u['nombre'],
+                ':ap_paterno' => $u['ap_paterno'],
+                ':ap_materno' => $u['ap_materno'],
+                ':fechaNa'    => $u['fechaNa'],
+                ':direccion'  => $u['direccion']
             ]);
-            $docentesIds[$u['username']] = $conn->lastInsertId();
+            $idPersona = $conn->lastInsertId();
+
+            // Insertar EXTRA_PERSONA
+            $stmt = $conn->prepare("INSERT INTO EXTRA_PERSONA (id_persona, telefono, correo) VALUES (:id, :tel, :correo)");
+            $stmt->execute([':id' => $idPersona, ':tel' => $u['telefono'], ':correo' => $u['correo']]);
+
+            // Crear BUZON
+            $stmt = $conn->prepare("INSERT INTO BUZON (no_leidos) VALUES (0)");
+            $stmt->execute();
+            $idBuzon = $conn->lastInsertId();
+        }
+
+        // Insertar en tabla de cargo específico (skip if already exists)
+        if ($u['tipo'] === 'administrativo') {
+            $stmt = $conn->prepare("SELECT id_administrativo FROM ADMINISTRATIVO WHERE id_persona = :id");
+            $stmt->execute([':id' => $idPersona]);
+            if (!$stmt->fetch()) {
+                $stmt = $conn->prepare("
+                    INSERT INTO ADMINISTRATIVO (id_persona, es_activo, grado_academico, especialidad, id_buzon)
+                    VALUES (:id_persona, 1, :grado, :esp, :buzon)
+                ");
+                $stmt->execute([':id_persona' => $idPersona, ':grado' => $u['grado_academico'], ':esp' => $u['especialidad'], ':buzon' => $idBuzon]);
+            }
+        } else {
+            $stmt = $conn->prepare("SELECT id_docente FROM DOCENTES WHERE id_persona = :id");
+            $stmt->execute([':id' => $idPersona]);
+            $existingDoc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existingDoc) {
+                $docentesIds[$u['username']] = $existingDoc['id_docente'];
+            } else {
+                $stmt = $conn->prepare("
+                    INSERT INTO DOCENTES (id_persona, cod_docente, tipo_contrato, es_activo, grado_academico, especialidad, id_buzon)
+                    VALUES (:id_persona, :cod, :contrato, 1, :grado, :esp, :buzon)
+                ");
+                $stmt->execute([
+                    ':id_persona' => $idPersona,
+                    ':cod'        => $u['cod_docente'],
+                    ':contrato'   => $u['tipo_contrato'],
+                    ':grado'      => $u['grado_academico'],
+                    ':esp'        => $u['especialidad'],
+                    ':buzon'      => $idBuzon ?? 0
+                ]);
+                $docentesIds[$u['username']] = $conn->lastInsertId();
+            }
         }
 
         // Insertar CREDENCIALES
@@ -260,6 +445,9 @@ try {
         ['nombre' => 'Ciencia y Tecnología',   'descripcion' => 'Estudio de las ciencias naturales, biología, física y química elemental.'],
         ['nombre' => 'Historia y Geografía',    'descripcion' => 'Conocimiento histórico nacional, mundial y geografía descriptiva.'],
         ['nombre' => 'Inglés Técnico',          'descripcion' => 'Desarrollo de competencias lingüísticas en idioma extranjero.'],
+        ['nombre' => 'Arte y Visual',           'descripcion' => 'Expresión artística, pintura, dibujo técnico y apreciación estética.'],
+        ['nombre' => 'Educación Física',        'descripcion' => 'Desarrollo psicomotor, deporte, recreación y hábitos saludables.'],
+        ['nombre' => 'Computación e Informática', 'descripcion' => 'Fundamentos de informática, programación básica y uso de herramientas digitales.'],
     ];
 
     $cursosIds = [];
@@ -275,23 +463,24 @@ try {
             $cursosIds[$c['nombre']] = $conn->lastInsertId();
         }
     }
-    echo "   ✔ 5 Cursos académicos registrados.\n\n";
+    echo "   ✔ 8 Cursos académicos registrados.\n\n";
 
     // -----------------------------------------------------------------
     // 5. ASOCIACIÓN GRADO - CURSO (GRADO_CURSO)
     // -----------------------------------------------------------------
     echo "5. Creando malla curricular Grado-Curso (Año 2026)...\n";
+
     $gradoCursoMap = []; // Key: "Grado|Curso" => id_gradoCurso
 
     foreach ($gradosIds as $nombreGrado => $idGrado) {
         foreach ($cursosIds as $nombreCurso => $idCurso) {
-            $stmt = $conn->prepare("SELECT id_gradoCurso FROM GRADO_CURSO WHERE id_grado = :g AND id_curso = :c AND año = 2026");
+            $stmt = $conn->prepare("SELECT id_gradoCurso FROM GRADO_CURSO WHERE id_grado = :g AND id_curso = :c AND anio = 2026");
             $stmt->execute([':g' => $idGrado, ':c' => $idCurso]);
             $row = $stmt->fetch();
             if ($row) {
                 $gradoCursoMap["{$nombreGrado}|{$nombreCurso}"] = $row['id_gradoCurso'];
             } else {
-                $stmt = $conn->prepare("INSERT INTO GRADO_CURSO (id_grado, id_curso, año) VALUES (:g, :c, 2026)");
+                $stmt = $conn->prepare("INSERT INTO GRADO_CURSO (id_grado, id_curso, anio) VALUES (:g, :c, 2026)");
                 $stmt->execute([':g' => $idGrado, ':c' => $idCurso]);
                 $gradoCursoMap["{$nombreGrado}|{$nombreCurso}"] = $conn->lastInsertId();
             }
@@ -306,12 +495,20 @@ try {
     
     // Asignaciones
     $asignacionesConfig = [
-        ['docente' => 'prof.matematica',   'grado' => '1° Secundaria', 'curso' => 'Matemáticas',           'dia' => 'Lunes',     'inicio' => '08:00:00', 'fin' => '10:00:00'],
-        ['docente' => 'prof.matematica',   'grado' => '2° Secundaria', 'curso' => 'Matemáticas',           'dia' => 'Martes',    'inicio' => '10:15:00', 'fin' => '12:15:00'],
-        ['docente' => 'prof.comunicacion', 'grado' => '1° Secundaria', 'curso' => 'Comunicación',          'dia' => 'Miércoles', 'inicio' => '08:00:00', 'fin' => '10:00:00'],
-        ['docente' => 'prof.comunicacion', 'grado' => '2° Secundaria', 'curso' => 'Comunicación',          'dia' => 'Jueves',    'inicio' => '10:15:00', 'fin' => '12:15:00'],
-        ['docente' => 'prof.ciencias',     'grado' => '1° Secundaria', 'curso' => 'Ciencia y Tecnología', 'dia' => 'Viernes',   'inicio' => '08:00:00', 'fin' => '10:00:00'],
-        ['docente' => 'docente',           'grado' => '1° Primaria',   'curso' => 'Matemáticas',           'dia' => 'Lunes',     'inicio' => '10:15:00', 'fin' => '11:45:00'],
+        ['docente' => 'docente',           'grado' => '1° Primaria',   'curso' => 'Matemáticas',             'dia' => 'Lunes',     'inicio' => '10:15:00', 'fin' => '11:45:00'],
+        ['docente' => 'docente',           'grado' => '3° Primaria',   'curso' => 'Comunicación',            'dia' => 'Martes',    'inicio' => '08:00:00', 'fin' => '09:30:00'],
+        ['docente' => 'prof.matematica',   'grado' => '1° Secundaria', 'curso' => 'Matemáticas',             'dia' => 'Lunes',     'inicio' => '08:00:00', 'fin' => '10:00:00'],
+        ['docente' => 'prof.matematica',   'grado' => '2° Secundaria', 'curso' => 'Matemáticas',             'dia' => 'Martes',    'inicio' => '10:15:00', 'fin' => '12:15:00'],
+        ['docente' => 'prof.comunicacion', 'grado' => '1° Secundaria', 'curso' => 'Comunicación',            'dia' => 'Miércoles', 'inicio' => '08:00:00', 'fin' => '10:00:00'],
+        ['docente' => 'prof.comunicacion', 'grado' => '2° Secundaria', 'curso' => 'Comunicación',            'dia' => 'Jueves',    'inicio' => '10:15:00', 'fin' => '12:15:00'],
+        ['docente' => 'prof.ciencias',     'grado' => '1° Secundaria', 'curso' => 'Ciencia y Tecnología',    'dia' => 'Viernes',   'inicio' => '08:00:00', 'fin' => '10:00:00'],
+        ['docente' => 'prof.historia',     'grado' => '2° Secundaria', 'curso' => 'Historia y Geografía',    'dia' => 'Viernes',   'inicio' => '10:15:00', 'fin' => '12:15:00'],
+        ['docente' => 'prof.arte',         'grado' => '3° Primaria',   'curso' => 'Arte y Visual',           'dia' => 'Miércoles', 'inicio' => '10:00:00', 'fin' => '11:30:00'],
+        ['docente' => 'prof.arte',         'grado' => '1° Secundaria', 'curso' => 'Arte y Visual',           'dia' => 'Jueves',    'inicio' => '08:00:00', 'fin' => '09:30:00'],
+        ['docente' => 'prof.edfisica',     'grado' => '1° Primaria',   'curso' => 'Educación Física',        'dia' => 'Miércoles', 'inicio' => '08:00:00', 'fin' => '09:30:00'],
+        ['docente' => 'prof.edfisica',     'grado' => '2° Secundaria', 'curso' => 'Educación Física',        'dia' => 'Lunes',     'inicio' => '14:00:00', 'fin' => '15:30:00'],
+        ['docente' => 'prof.computacion',  'grado' => '3° Primaria',   'curso' => 'Computación e Informática','dia' => 'Jueves',   'inicio' => '10:00:00', 'fin' => '11:30:00'],
+        ['docente' => 'prof.computacion',  'grado' => '2° Secundaria', 'curso' => 'Computación e Informática','dia' => 'Martes',  'inicio' => '14:00:00', 'fin' => '15:30:00'],
     ];
 
     foreach ($asignacionesConfig as $asig) {
@@ -485,11 +682,16 @@ try {
     echo "=============================================================\n\n";
 
     echo "Resumen de Usuarios para Pruebas:\n";
-    echo "  📌 Director/Admin  -> user: director        | pass: director123\n";
-    echo "  📌 Docente Gral    -> user: docente         | pass: docente123\n";
+    echo "  📌 Director/Admin  -> user: director         | pass: director123\n";
+    echo "  📌 Contador        -> user: contador         | pass: contador123\n";
+    echo "  📌 Docente Gral    -> user: docente          | pass: docente123\n";
     echo "  📌 Prof. Matemática -> user: prof.matematica  | pass: matematica123\n";
     echo "  📌 Prof. Lenguaje   -> user: prof.comunicacion| pass: comunicacion123\n";
-    echo "  📌 Prof. Ciencias   -> user: prof.ciencias    | pass: ciencias123\n\n";
+    echo "  📌 Prof. Ciencias   -> user: prof.ciencias    | pass: ciencias123\n";
+    echo "  📌 Prof. Historia   -> user: prof.historia    | pass: historia123\n";
+    echo "  📌 Prof. Arte       -> user: prof.arte        | pass: arte123\n";
+    echo "  📌 Prof. Ed.Física  -> user: prof.edfisica    | pass: edfisica123\n";
+    echo "  📌 Prof. Computación -> user: prof.computacion| pass: computacion123\n\n";
 
 } catch (Exception $e) {
     if (isset($conn) && $conn->inTransaction()) {

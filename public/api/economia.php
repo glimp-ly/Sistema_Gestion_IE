@@ -1,5 +1,10 @@
 <?php
 require_once __DIR__ . '/../../controllers/EconomiaController.php';
+require_once __DIR__ . '/../../core/security.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -8,10 +13,10 @@ if (isset($_SERVER['HTTP_ORIGIN'])) {
     header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
     header('Access-Control-Allow-Credentials: true');
 } else {
-    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Origin: ' . ($_SERVER['HTTP_HOST'] ?? ''));
 }
 header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Accept, X-Requested-With, X-CSRF-Token');
 
 function responseJson($success, $message, $data = null)
 {
@@ -26,6 +31,11 @@ function responseJson($success, $message, $data = null)
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(204);
     exit;
+}
+
+if (empty($_SESSION['usuario_id'])) {
+    http_response_code(401);
+    responseJson(false, 'Debe iniciar sesión para acceder a este recurso.', null);
 }
 
 try {
@@ -43,6 +53,11 @@ try {
     }
 
     if ($method === 'POST' || $method === 'PATCH') {
+        $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $payload['csrf_token'] ?? $_POST['csrf_token'] ?? '';
+        if (!Security::validarTokenCSRF($csrfToken)) {
+            http_response_code(403);
+            responseJson(false, 'Token CSRF inválido o ausente.', null);
+        }
         $payload = array_merge($_POST, $payload);
     }
 
