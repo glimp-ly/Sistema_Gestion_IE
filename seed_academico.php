@@ -547,43 +547,33 @@ try {
     $gcMat1Sec = $gradoCursoMap['1° Secundaria|Matemáticas'] ?? null;
     $actividadesIds = [];
 
-    if ($gcMat1Sec) {
-        // Sesiones
-        $sesionesList = [
-            ['nombre' => 'Sesión 1: Ecuaciones de Primer Grado', 'desc' => 'Introducción a despeje de variables y métodos de resolución.'],
-            ['nombre' => 'Sesión 2: Sistemas de Ecuaciones 2x2',  'desc' => 'Métodos de sustitución e igualación.'],
-        ];
+    // Crear actividades para todos los cursos de GRADO_CURSO
+    $gcStmt = $conn->query("SELECT id_gradoCurso, id_curso FROM GRADO_CURSO");
+    $gcList = $gcStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($sesionesList as $s) {
-            $stmt = $conn->prepare("SELECT id_sesion FROM SESION WHERE id_gradoCurso = :gc AND nombre = :n");
-            $stmt->execute([':gc' => $gcMat1Sec, ':n' => $s['nombre']]);
-            if (!$stmt->fetch()) {
-                $stmt = $conn->prepare("INSERT INTO SESION (nombre, descripcion, id_gradoCurso) VALUES (:n, :d, :gc)");
-                $stmt->execute([':n' => $s['nombre'], ':d' => $s['desc'], ':gc' => $gcMat1Sec]);
-            }
-        }
+    $actividadesPorGc = [];
+    $actividadesDefinidas = [
+        ['nombre' => 'Examen Parcial', 'peso' => 40.00],
+        ['nombre' => 'Práctica Calificada', 'peso' => 30.00],
+        ['nombre' => 'Trabajo Colectivo', 'peso' => 30.00]
+    ];
 
-        // Actividades Evaluativas (Exámenes / Prácticas)
-        $actividadesList = [
-            ['nombre' => 'Examen Parcial 1',        'peso' => 40.00],
-            ['nombre' => 'Práctica Calificada 1',   'peso' => 30.00],
-            ['nombre' => 'Trabajo de Investigación','peso' => 30.00],
-        ];
-
-        foreach ($actividadesList as $act) {
+    foreach ($gcList as $gc) {
+        $idGc = $gc['id_gradoCurso'];
+        foreach ($actividadesDefinidas as $actDef) {
             $stmt = $conn->prepare("SELECT id_actividad FROM ACTIVIDADES WHERE id_gradoCurso = :gc AND nombre = :n");
-            $stmt->execute([':gc' => $gcMat1Sec, ':n' => $act['nombre']]);
+            $stmt->execute([':gc' => $idGc, ':n' => $actDef['nombre']]);
             $row = $stmt->fetch();
             if ($row) {
-                $actividadesIds[$act['nombre']] = $row['id_actividad'];
+                $actividadesPorGc[$idGc][] = $row['id_actividad'];
             } else {
                 $stmt = $conn->prepare("INSERT INTO ACTIVIDADES (nombre, peso, id_gradoCurso) VALUES (:n, :p, :gc)");
-                $stmt->execute([':n' => $act['nombre'], ':p' => $act['peso'], ':gc' => $gcMat1Sec]);
-                $actividadesIds[$act['nombre']] = $conn->lastInsertId();
+                $stmt->execute([':n' => $actDef['nombre'], ':p' => $actDef['peso'], ':gc' => $idGc]);
+                $actividadesPorGc[$idGc][] = $conn->lastInsertId();
             }
         }
     }
-    echo "   ✔ Sesiones de aprendizaje y rúbricas creadas.\n\n";
+    echo "   ✔ Sesiones de aprendizaje y rúbricas de evaluación creadas para todos los cursos.\n\n";
 
     // -----------------------------------------------------------------
     // 8. APODERADOS Y ALUMNOS (APODERADO, ALUMNOS)
@@ -610,67 +600,101 @@ try {
         $idApoderado = $conn->lastInsertId();
     }
 
-    // Lista de Alumnos
     $idGrado1Sec = $gradosIds['1° Secundaria'] ?? 1;
-    $alumnosList = [
-        ['dni' => '80000001', 'nombre' => 'Mateo',   'paterno' => 'Pérez',   'materno' => 'Rojas',   'cod' => 'ALU-0001'],
-        ['dni' => '80000002', 'nombre' => 'Sofia',   'paterno' => 'Quispe',  'materno' => 'Huamán',  'cod' => 'ALU-0002'],
-        ['dni' => '80000003', 'nombre' => 'Lucas',   'paterno' => 'Mendoza', 'materno' => 'Alvarez', 'cod' => 'ALU-0003'],
-    ];
+    $idGrado1Pri = $gradosIds['1° Primaria'] ?? 1;
 
-    $alumnosIds = [];
+    $alumnosList = [
+        ['dni' => '80000001', 'nombre' => 'Mateo',   'paterno' => 'Pérez',   'materno' => 'Rojas',   'cod' => 'ALU-0001', 'grado' => $idGrado1Sec],
+        ['dni' => '80000002', 'nombre' => 'Sofia',   'paterno' => 'Quispe',  'materno' => 'Huamán',  'cod' => 'ALU-0002', 'grado' => $idGrado1Sec],
+        ['dni' => '80000003', 'nombre' => 'Lucas',   'paterno' => 'Mendoza', 'materno' => 'Alvarez', 'cod' => 'ALU-0003', 'grado' => $idGrado1Sec],
+        ['dni' => '80000004', 'nombre' => 'Alvarez', 'paterno' => 'Quispe',  'materno' => 'Torres',  'cod' => 'ALU-P001', 'grado' => $idGrado1Pri],
+        ['dni' => '80000005', 'nombre' => 'Camila',  'paterno' => 'Barrient','materno' => 'Flores',  'cod' => 'ALU-P002', 'grado' => $idGrado1Pri],
+        ['dni' => '80000006', 'nombre' => 'Benjamin','paterno' => 'Calderon','materno' => 'Soto',    'cod' => 'ALU-P003', 'grado' => $idGrado1Pri],
+        ['dni' => '80000007', 'nombre' => 'Luana',   'paterno' => 'Delgado', 'materno' => 'Ruiz',    'cod' => 'ALU-P004', 'grado' => $idGrado1Pri],
+        ['dni' => '80000008', 'nombre' => 'Thiago',  'paterno' => 'Espinoza','materno' => 'Mendoza', 'cod' => 'ALU-P005', 'grado' => $idGrado1Pri],
+    ];
 
     foreach ($alumnosList as $alu) {
         $stmt = $conn->prepare("SELECT id_alumno FROM ALUMNOS WHERE cod_alumn = :cod");
         $stmt->execute([':cod' => $alu['cod']]);
         $row = $stmt->fetch();
-        if ($row) {
-            $alumnosIds[] = $row['id_alumno'];
-        } else {
+        if (!$row) {
             $stmt = $conn->prepare("INSERT INTO PERSONAS (dni, nombre, ap_paterno, ap_materno, fechaNa, direccion) VALUES (:dni, :n, :p, :m, '2012-05-10', 'Av. Solar 456')");
             $stmt->execute([':dni' => $alu['dni'], ':n' => $alu['nombre'], ':p' => $alu['paterno'], ':m' => $alu['materno']]);
             $idPersAlu = $conn->lastInsertId();
 
             $stmt = $conn->prepare("INSERT INTO ALUMNOS (id_persona, cod_alumn, id_apoderado, id_grado) VALUES (:p, :cod, :apod, :g)");
-            $stmt->execute([':p' => $idPersAlu, ':cod' => $alu['cod'], ':apod' => $idApoderado, ':g' => $idGrado1Sec]);
-            $alumnosIds[] = $conn->lastInsertId();
+            $stmt->execute([':p' => $idPersAlu, ':cod' => $alu['cod'], ':apod' => $idApoderado, ':g' => $alu['grado']]);
         }
     }
-    echo "   ✔ 3 Alumnos matriculados en 1° Secundaria.\n\n";
+
+    $todosAlumnos = $conn->query("SELECT id_alumno, id_grado FROM ALUMNOS")->fetchAll(PDO::FETCH_ASSOC);
+    echo "   ✔ " . count($todosAlumnos) . " Alumnos matriculados en la institución.\n\n";
 
     // -----------------------------------------------------------------
     // 9. NOTAS Y ASISTENCIA (NOTAS, ASISTENCIA)
     // -----------------------------------------------------------------
-    echo "9. Calificando actividades y registrando asistencias...\n";
+    echo "9. Calificando actividades y registrando asistencias para la institución...\n";
 
-    // Registrar Notas de prueba
-    if (!empty($actividadesIds) && !empty($alumnosIds)) {
-        $notasMuestra = [18.5, 15.0, 16.5];
-        $i = 0;
-        foreach ($alumnosIds as $idAlu) {
-            foreach ($actividadesIds as $nombreAct => $idAct) {
-                $stmt = $conn->prepare("SELECT id_nota FROM NOTAS WHERE id_actividad = :act AND id_alumno = :alu");
-                $stmt->execute([':act' => $idAct, ':alu' => $idAlu]);
-                if (!$stmt->fetch()) {
-                    $notaVal = $notasMuestra[$i % count($notasMuestra)];
-                    $stmt = $conn->prepare("INSERT INTO NOTAS (nota, id_actividad, id_alumno) VALUES (:n, :act, :alu)");
-                    $stmt->execute([':n' => $notaVal, ':act' => $idAct, ':alu' => $idAlu]);
-                }
-                $i++;
+    $matrizNotas = [
+        'ALU-0001' => [15.0, 17.0, 14.0],
+        'ALU-0002' => [18.0, 19.0, 17.0],
+        'ALU-0003' => [11.0, 12.0, 10.0],
+        'ALU-P001' => [15.0, 17.0, 14.0],
+        'ALU-P002' => [18.0, 19.0, 17.0],
+        'ALU-P003' => [11.0, 12.0, 10.0],
+        'ALU-P004' => [8.0,  13.0, 9.0],
+        'ALU-P005' => [14.0, 15.0, 15.0],
+    ];
+
+    foreach ($todosAlumnos as $alu) {
+        $idAlu = $alu['id_alumno'];
+        $idGrado = $alu['id_grado'];
+
+        // Obtener codigo del alumno
+        $stmtCod = $conn->prepare("SELECT cod_alumn FROM ALUMNOS WHERE id_alumno = ?");
+        $stmtCod->execute([$idAlu]);
+        $codAlu = $stmtCod->fetchColumn();
+
+        $notasBase = $matrizNotas[$codAlu] ?? [14.0, 15.0, 14.5];
+
+        // Buscar actividades asociadas al grado del alumno
+        $stmtAct = $conn->prepare("
+            SELECT act.id_actividad 
+            FROM ACTIVIDADES act 
+            JOIN GRADO_CURSO gc ON act.id_gradoCurso = gc.id_gradoCurso 
+            WHERE gc.id_grado = ?
+        ");
+        $stmtAct->execute([$idGrado]);
+        $acts = $stmtAct->fetchAll(PDO::FETCH_COLUMN);
+
+        $idx = 0;
+        foreach ($acts as $idAct) {
+            $stmt = $conn->prepare("SELECT id_nota FROM NOTAS WHERE id_actividad = :act AND id_alumno = :alu");
+            $stmt->execute([':act' => $idAct, ':alu' => $idAlu]);
+            if (!$stmt->fetch()) {
+                $notaVal = $notasBase[$idx % count($notasBase)];
+                $stmtIns = $conn->prepare("INSERT INTO NOTAS (nota, id_actividad, id_alumno) VALUES (:n, :act, :alu)");
+                $stmtIns->execute([':n' => $notaVal, ':act' => $idAct, ':alu' => $idAlu]);
+            }
+            $idx++;
+        }
+
+        // Asistencia de los últimos 3 días
+        $fechas = [date('Y-m-d'), date('Y-m-d', strtotime('-1 day')), date('Y-m-d', strtotime('-2 days'))];
+        $tipos   = ['P', 'P', 'T'];
+
+        foreach ($fechas as $fIdx => $f) {
+            $stmtAtt = $conn->prepare("SELECT id_asistencia FROM ASISTENCIA WHERE id_alumno = :alu AND fecha = :f");
+            $stmtAtt->execute([':alu' => $idAlu, ':f' => $f]);
+            if (!$stmtAtt->fetch()) {
+                $tipoVal = $tipos[$fIdx % count($tipos)];
+                $stmtInsAtt = $conn->prepare("INSERT INTO ASISTENCIA (fecha, tipo, id_alumno) VALUES (:f, :t, :alu)");
+                $stmtInsAtt->execute([':f' => $f, ':t' => $tipoVal, ':alu' => $idAlu]);
             }
         }
     }
-
-    // Registrar Asistencias de prueba
-    foreach ($alumnosIds as $idAlu) {
-        $stmt = $conn->prepare("SELECT id_asistencia FROM ASISTENCIA WHERE id_alumno = :alu AND fecha = CURDATE()");
-        $stmt->execute([':alu' => $idAlu]);
-        if (!$stmt->fetch()) {
-            $stmt = $conn->prepare("INSERT INTO ASISTENCIA (fecha, tipo, id_alumno) VALUES (CURDATE(), 'P', :alu)");
-            $stmt->execute([':alu' => $idAlu]);
-        }
-    }
-    echo "   ✔ Registros de notas y asistencias procesados.\n\n";
+    echo "   ✔ Registros de notas y asistencias procesados exitosamente.\n\n";
 
     // -----------------------------------------------------------------
     // FIN Y CONFIRMACIÓN DE TRANSACCIÓN

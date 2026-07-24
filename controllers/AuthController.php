@@ -60,6 +60,15 @@ class AuthController
                 $_SESSION['rol_nombre']     = $usuario['rol_nombre'];
                 $_SESSION['last_activity']  = time();
 
+                // Si el rol es Docente, resolver y guardar el id_docente en sesión
+                $rol = strtolower(trim($usuario['rol_nombre']));
+                if ($rol === 'docente') {
+                    require_once "models/UsuarioModel.php";
+                    $usuarioModel = new UsuarioModel();
+                    $idDocente = $usuarioModel->getIdDocenteByCredencial($usuario['id']);
+                    $_SESSION['id_docente'] = $idDocente;
+                }
+
                 session_regenerate_id(true);
 
                 // Determinar la URL de redirección según el rol asignado

@@ -23,7 +23,8 @@
     window.currentSession = {
       name: "<?php echo htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Usuario'); ?>",
       email: "<?php echo htmlspecialchars($_SESSION['usuario_email'] ?? ''); ?>",
-      role: "<?php echo htmlspecialchars($_SESSION['rol_nombre'] ?? ''); ?>"
+      role: "<?php echo htmlspecialchars($_SESSION['rol_nombre'] ?? ''); ?>",
+      csrfToken: "<?php echo Security::generarTokenCSRF(); ?>"
     };
   </script>
   
