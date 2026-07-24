@@ -38,6 +38,10 @@
     return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/actividades.php';
   }
 
+  function getApiUrl(path) {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + path;
+  }
+
   async function updateNotificationBadge() {
     const badge = document.getElementById('navbar-notification-count');
     if (!badge) return;
