@@ -30,13 +30,13 @@ class ActividadModel
     public function listarCursosAsignados(int $idDocente): array
     {
         $stmt = $this->conn->prepare(
-            "SELECT DISTINCT
+            "SELECT
                 gc.id_gradoCurso,
                 c.id_curso,
                 c.nombre AS curso,
                 g.id_grado,
                 CONCAT(g.nombre, ' - ', g.seccion) AS grado,
-                gc.`año` AS anio
+                gc.anio
              FROM ASIGNACION_CURSO ac
              INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = ac.id_gradoCurso
              INNER JOIN CURSO c ON c.id_curso = gc.id_curso
@@ -60,7 +60,7 @@ class ActividadModel
                 TIME_FORMAT(ac.hora_fin, '%H:%i') AS hora_fin,
                 c.nombre AS curso,
                 CONCAT(g.nombre, ' - ', g.seccion) AS grado,
-                gc.`año` AS anio
+                gc.anio
              FROM ASIGNACION_CURSO ac
              INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = ac.id_gradoCurso
              INNER JOIN CURSO c ON c.id_curso = gc.id_curso
@@ -77,14 +77,14 @@ class ActividadModel
     public function listarActividades(int $idDocente): array
     {
         $stmt = $this->conn->prepare(
-            "SELECT DISTINCT
+            "SELECT
                 a.id_actividad,
                 a.nombre,
                 a.peso,
                 a.id_gradoCurso,
                 c.nombre AS curso,
                 CONCAT(g.nombre, ' - ', g.seccion) AS grado,
-                gc.`año` AS anio
+                gc.anio
              FROM ACTIVIDADES a
              INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = a.id_gradoCurso
              INNER JOIN CURSO c ON c.id_curso = gc.id_curso
@@ -93,7 +93,7 @@ class ActividadModel
              WHERE ac.id_docente = :id_docente
                AND CURDATE() >= ac.fecha_asignacion
                AND (ac.fecha_finAsig IS NULL OR CURDATE() <= ac.fecha_finAsig)
-             ORDER BY gc.`año` DESC, g.nombre, c.nombre, a.id_actividad DESC"
+             ORDER BY gc.anio DESC, g.nombre, c.nombre, a.id_actividad DESC"
         );
         $stmt->execute([':id_docente' => $idDocente]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -191,14 +191,14 @@ class ActividadModel
     private function obtenerActividad(int $idActividad, int $idDocente): ?array
     {
         $stmt = $this->conn->prepare(
-            "SELECT DISTINCT
+            "SELECT
                 a.id_actividad,
                 a.nombre,
                 a.peso,
                 a.id_gradoCurso,
                 c.nombre AS curso,
                 CONCAT(g.nombre, ' - ', g.seccion) AS grado,
-                gc.`año` AS anio
+                gc.anio
              FROM ACTIVIDADES a
              INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = a.id_gradoCurso
              INNER JOIN CURSO c ON c.id_curso = gc.id_curso
