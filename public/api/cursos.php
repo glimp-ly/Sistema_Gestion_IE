@@ -33,6 +33,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $query   = $_GET;
     $input = file_get_contents('php://input');
     $payload = [];
 
@@ -53,7 +54,7 @@ try {
     }
 
     $controller = new CursoController();
-    $result = $controller->handleRequest($method, $payload);
+    $result = $controller->handleRequest($method, $payload, $query);
     responseJson($result['success'], $result['message'], $result['data']);
 } catch (Throwable $e) {
     http_response_code(500);

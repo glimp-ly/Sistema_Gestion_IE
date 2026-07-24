@@ -13,10 +13,10 @@ class CursoController
         $this->model->ensureTables();
     }
 
-    public function handleRequest(string $method, array $payload = []): array
+    public function handleRequest(string $method, array $payload = [], array $query = []): array
     {
         if ($method === 'GET') {
-            $action = $payload['action'] ?? '';
+            $action = $query['action'] ?? '';
 
             if ($action === 'get-mis-cursos') {
                 $idDocente = $_SESSION['id_docente'] ?? null;
