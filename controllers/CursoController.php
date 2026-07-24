@@ -16,6 +16,17 @@ class CursoController
     public function handleRequest(string $method, array $payload = []): array
     {
         if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get-mis-cursos') {
+                $idDocente = $_SESSION['id_docente'] ?? null;
+                if (!$idDocente) {
+                    return ['success' => false, 'message' => 'No se pudo identificar al docente.', 'data' => null];
+                }
+                $assignments = $this->model->getAssignmentsByDocente((int)$idDocente);
+                return ['success' => true, 'message' => 'Cursos del docente cargados correctamente.', 'data' => ['assignments' => $assignments]];
+            }
+
             return ['success' => true, 'message' => 'Datos de cursos cargados correctamente.', 'data' => $this->model->getReferenceData()];
         }
 

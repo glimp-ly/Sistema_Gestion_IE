@@ -574,10 +574,13 @@
     const markAllPresentBtn = document.getElementById('btn-mark-all-present');
     const saveBtn = document.getElementById('btn-save-asist');
 
-    // ── Cargar cursos desde la API (asignaciones reales de la BD) ──────────
-    fetch(getApiUrl('public/api/cursos.php'), {
+    // ── Cargar cursos asignados al docente logueado desde la API ──────────
+    const misCursosUrl = new URL(getApiUrl('public/api/cursos.php'));
+    misCursosUrl.searchParams.set('action', 'get-mis-cursos');
+    fetch(misCursosUrl.toString(), {
       headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      cache: 'no-store'
+      cache: 'no-store',
+      credentials: 'include'
     })
       .then(r => r.json())
       .then(res => {

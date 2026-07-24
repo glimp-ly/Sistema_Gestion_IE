@@ -151,6 +151,26 @@ class CursoModel
         }
     }
 
+    public function getAssignmentsByDocente(int $idDocente): array
+    {
+        $assignmentsStmt = $this->pdo->prepare(
+            "SELECT ac.id_asignacionCurso, ac.dia_horario, ac.hora_inicio, ac.hora_fin, ac.fecha_asignacion, ac.fecha_finAsig, " .
+            "d.id_docente, d.cod_docente, CONCAT(p.nombre, ' ', p.ap_paterno) AS nombre_completo, " .
+            "c.id_curso, c.nombre AS nombre_curso, " .
+            "g.id_grado, g.nombre AS nombre_grado, g.seccion, gc.año " .
+            "FROM ASIGNACION_CURSO ac " .
+            "INNER JOIN DOCENTES d ON d.id_docente = ac.id_docente " .
+            "INNER JOIN PERSONAS p ON d.id_persona = p.id_persona " .
+            "INNER JOIN GRADO_CURSO gc ON gc.id_gradoCurso = ac.id_gradoCurso " .
+            "INNER JOIN CURSO c ON c.id_curso = gc.id_curso " .
+            "INNER JOIN GRADO g ON g.id_grado = gc.id_grado " .
+            "WHERE ac.id_docente = ? " .
+            "ORDER BY ac.id_asignacionCurso DESC"
+        );
+        $assignmentsStmt->execute([$idDocente]);
+        return $assignmentsStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     private function normalizeTime(string $value): string
     {
         $value = trim($value);

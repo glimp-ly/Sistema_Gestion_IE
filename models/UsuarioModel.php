@@ -213,4 +213,21 @@ class UsuarioModel
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['total'];
     }
+
+    public function getIdDocenteByCredencial(int $idCredenciales): ?int
+    {
+        $query = "
+            SELECT d.id_docente
+            FROM DOCENTES d
+            INNER JOIN PERSONAS p ON d.id_persona = p.id_persona
+            INNER JOIN CREDENCIALES c ON c.id_persona = p.id_persona
+            WHERE c.id_credenciales = :id
+            LIMIT 1
+        ";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $idCredenciales, PDO::PARAM_INT);
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? (int)$result['id_docente'] : null;
+    }
 }
