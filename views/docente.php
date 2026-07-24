@@ -1,218 +1,42 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-require_once __DIR__ . '/../core/config.php';
-require_once __DIR__ . '/../core/security.php';
-Security::verificarRol(['Docente', 'docente']);
+Security::verificarRol(['Docente']);
+
+$pageTitle = "Portal Docente - IEP Corazón de Jesús College";
+require_once "views/components/head.php";
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portal Docente - IEP Corazón de Jesús College</title>
-
-  <script>
-    const BASE_URL = "<?php echo BASE_URL; ?>";
-    window.currentSession = {
-      name: "<?php echo htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Docente'); ?>",
-      email: "<?php echo htmlspecialchars($_SESSION['usuario_email'] ?? ''); ?>",
-      role: "<?php echo htmlspecialchars($_SESSION['rol_nombre'] ?? 'Docente'); ?>"
-    };
-  </script>
-
-  <!-- Hojas de estilo CSS que componen la interfaz del portal docente -->
-  <link rel="stylesheet" href="<?php echo BASE_URL; ?>public/css/variables.css">
-  <link rel="stylesheet" href="<?php echo BASE_URL; ?>public/css/common.css">
-  <link rel="stylesheet" href="<?php echo BASE_URL; ?>public/css/dashboard.css">
-  <link rel="stylesheet" href="<?php echo BASE_URL; ?>public/css/components.css">
-
-  <!-- Guardia de Seguridad -->
-  <script src="<?php echo BASE_URL; ?>public/js/auth.js"></script>
-  <script>
-    if (window.SchoolAuth) {
-      window.SchoolAuth.checkGuard('docente');
-    }
-  </script>
-</head>
 <body>
 
   <div id="app-layout">
-    <!-- Capa de fondo oscura para móviles cuando el panel lateral (Sidebar) se despliega -->
+    <!-- Capa de fondo oscura para móviles -->
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
     <!-- Menú de Navegación Lateral (Sidebar) -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="school-logo">
-          <!-- Escudo del Colegio en SVG -->
-          <svg viewBox="0 0 24 24">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-            <path d="M2 17l10 5 10-5"></path>
-            <path d="M2 12l10 5 10-5"></path>
-          </svg>
-          <span class="school-name">Corazón de Jesús</span>
-        </div>
-      </div>
-
-      <!-- Menú principal con enlaces basados en Hash ('#') para enrutamiento SPA en frontend -->
-      <ul class="sidebar-menu">
-        <li class="menu-item">
-          <a href="#info-personal" class="menu-link">
-            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-            <span>Información Personal</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="#cursos" class="menu-link">
-            <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-            <span>Mis Cursos</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="#actividades" class="menu-link">
-            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            <span>Horarios y Actividades</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="#asistencia" class="menu-link">
-            <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-            <span>Registrar Asistencia</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="#incidencias" class="menu-link">
-            <svg viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            <span>Incidencias</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="#reportes" class="menu-link">
-            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-            <span>Reportes</span>
-          </a>
-        </li>
-      </ul>
-
-      <!-- Footer del Sidebar con datos de la sesión del usuario docente -->
-      <div class="sidebar-footer">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="user-avatar" id="sidebar-user-avatar">CR</div>
-          <div style="display: flex; flex-direction: column; overflow: hidden;">
-            <strong style="font-size: 13px; text-overflow: ellipsis; overflow: hidden;" id="sidebar-user-name">Prof. Carlos Rivas</strong>
-            <span style="font-size: 10px; opacity: 0.7;">IEP Corazón de Jesús</span>
-          </div>
-        </div>
-      </div>
-    </aside>
+    <?php 
+    $activeRole = 'docente';
+    require_once "views/components/sidebar.php"; 
+    ?>
 
     <!-- Contenedor Principal de la Página -->
     <div class="main-wrapper">
-      <header class="top-navbar">
-        <div class="navbar-left">
-          <!-- Botón hamburguesa: Abre el sidebar móvil (drawer) -->
-          <button class="mobile-hamburger" id="mobile-drawer-btn">
-            <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-          </button>
-          
-          <!-- Botón de colapso: Oculta/Muestra el sidebar en pantallas grandes de escritorio -->
-          <button class="toggle-sidebar-btn" id="desktop-collapse-btn">
-            <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-          </button>
+      <!-- Barra de Navegación Superior (Navbar) -->
+      <?php 
+      $userRoleLabel = "Docente";
+      $badgeCount = 2;
+      require_once "views/components/navbar.php"; 
+      ?>
 
-          <!-- Título dinámico que cambia de acuerdo a la ruta activa -->
-          <h2 class="page-title" id="navbar-page-title">Cargando...</h2>
-        </div>
-
-        <div class="navbar-right">
-          <!-- Campana de Notificaciones -->
-          <div class="notification-bell">
-            <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-            <span class="bell-badge">2</span>
-          </div>
-
-          <!-- Información del perfil logueado -->
-          <div class="user-profile">
-            <div class="user-avatar">CR</div>
-            <div class="user-info">
-              <span class="user-name" id="navbar-user-name">Prof. Carlos Rivas</span>
-              <span class="user-role">Docente</span>
-            </div>
-          </div>
-
-          <!-- Botón de cierre de sesión (invoca a la función SchoolAuth.logout de auth.js) -->
-          <button class="logout-btn" id="logout-btn" onclick="window.SchoolAuth.logout()">
-            <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            <span>Salir</span>
-          </button>
-        </div>
-      </header>
-
-      <!-- Espacio dinámico donde el Router JS inyectará las vistas HTML de forma asíncrona -->
+      <!-- Espacio dinámico donde el Router JS inyectará las vistas de forma asíncrona -->
       <main class="main-content" id="main-content"></main>
     </div>
   </div>
 
-  <!-- Carga de Módulos Javascript -->
-  <!-- 1. mockData.js provee el motor CRUD de base de datos simulada en localStorage -->
-  <script src="<?php echo BASE_URL; ?>public/js/mockData.js"></script>
-  <!-- 2. router.js maneja la navegación SPA controlando el hashchange de la URL -->
-  <script src="<?php echo BASE_URL; ?>public/js/router.js"></script>
-  <!-- 3. docente.js contiene la lógica del docente y renderizado de interfaces de registro de notas, asistencia, etc. -->
-  <script src="<?php echo BASE_URL; ?>public/js/docente.js"></script>
-  
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Cargamos dinámicamente los datos del usuario logueado en la cabecera y el pie de página
-      const session = window.SchoolAuth.getSession();
-      if (session) {
-        document.getElementById('sidebar-user-name').textContent = session.name;
-        document.getElementById('navbar-user-name').textContent = session.name;
-        
-        // Calculamos las iniciales para los avatares
-        const initials = session.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-        document.querySelectorAll('.user-avatar, #sidebar-user-avatar').forEach(el => {
-          el.textContent = initials;
-        });
-      }
+  <!-- Ventana Modal Genérica Reutilizable -->
+  <?php require_once "views/components/modal.php"; ?>
 
-      // Configuración de los eventos interactivos del Sidebar (Colapso y Responsive)
-      const layout = document.getElementById('app-layout');
-      const deskBtn = document.getElementById('desktop-collapse-btn');
-      const mobBtn = document.getElementById('mobile-drawer-btn');
-      const overlay = document.getElementById('sidebar-overlay');
-
-      // Colapso de menú en escritorio
-      deskBtn.addEventListener('click', function() {
-        layout.classList.toggle('collapsed');
-      });
-
-      // Apertura de menú móvil (Drawer)
-      mobBtn.addEventListener('click', function() {
-        layout.classList.add('mobile-active');
-      });
-
-      // Cierre de menú móvil al hacer clic fuera del panel (sobre la capa overlay)
-      overlay.addEventListener('click', function() {
-        layout.classList.remove('mobile-active');
-      });
-
-      // Definición de las Rutas del Docente
-      // Cada hash se asocia con un método renderizador expuesto por 'DocenteModule' en docente.js
-      const docentRoutes = {
-        '#info-personal': window.DocenteModule.renderInfoPersonal,
-        '#cursos': window.DocenteModule.renderCursos,
-        '#actividades': window.DocenteModule.renderActividades,
-        '#asistencia': window.DocenteModule.renderAsistencia,
-        '#incidencias': window.DocenteModule.renderIncidencias,
-        '#reportes': window.DocenteModule.renderReportes
-      };
-
-      // Inicialización del Enrutador, cargando '#info-personal' como vista predeterminada
-      window.SchoolRouter.init(docentRoutes, '#info-personal');
-    });
-  </script>
+  <!-- Carga de Módulos Javascript e Inicialización -->
+  <?php 
+  $moduleScript = "docente.js";
+  require_once "views/components/scripts.php"; 
+  ?>
 </body>
 </html>
