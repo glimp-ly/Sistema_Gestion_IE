@@ -16,17 +16,14 @@ class CursoController
     public function handleRequest(string $method, array $payload = []): array
     {
         if ($method === 'GET') {
-            $action = $_GET['action'] ?? '';
-
-            if ($action === 'get-mis-cursos') {
-                $idDocente = $_SESSION['id_docente'] ?? null;
-                if (!$idDocente) {
-                    return ['success' => false, 'message' => 'No se pudo identificar al docente.', 'data' => null];
+            if (($payload['scope'] ?? '') === 'mine') {
+                $role = strtolower(trim($_SESSION['rol_nombre'] ?? ''));
+                $credentialId = (int)($_SESSION['usuario_id'] ?? 0);
+                if ($role !== 'docente' || $credentialId <= 0) {
+                    return ['success' => false, 'message' => 'No tiene permiso para consultar estos cursos.', 'data' => null];
                 }
-                $assignments = $this->model->getAssignmentsByDocente((int)$idDocente);
-                return ['success' => true, 'message' => 'Cursos del docente cargados correctamente.', 'data' => ['assignments' => $assignments]];
+                return ['success' => true, 'message' => 'Cursos asignados cargados correctamente.', 'data' => $this->model->getCoursesForCredential($credentialId)];
             }
-
             return ['success' => true, 'message' => 'Datos de cursos cargados correctamente.', 'data' => $this->model->getReferenceData()];
         }
 

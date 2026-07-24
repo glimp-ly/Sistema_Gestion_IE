@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../../controllers/DocenteController.php';
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -44,6 +48,9 @@ try {
 
     if ($method === 'POST' || $method === 'PATCH') {
         $payload = array_merge($_POST, $payload);
+    }
+    if ($method === 'GET') {
+        $payload = array_merge($_GET, $payload);
     }
 
     $controller = new DocenteController();

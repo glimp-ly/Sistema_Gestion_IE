@@ -56,6 +56,24 @@ class CursoModel
         ];
     }
 
+    public function getCoursesForCredential(int $idCredenciales): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DISTINCT c.id_curso, c.nombre, c.descripcion, g.nombre AS nombre_grado, g.seccion " .
+            "FROM CREDENCIALES cr " .
+            "INNER JOIN docentes d ON d.id_persona = cr.id_persona " .
+            "INNER JOIN asignacion_curso ac ON ac.id_docente = d.id_docente " .
+            "INNER JOIN grado_curso gc ON gc.id_gradoCurso = ac.id_gradoCurso " .
+            "INNER JOIN curso c ON c.id_curso = gc.id_curso " .
+            "INNER JOIN grado g ON g.id_grado = gc.id_grado " .
+            "WHERE cr.id_credenciales = ? AND d.es_activo = 1 " .
+            "AND (ac.fecha_finAsig IS NULL OR ac.fecha_finAsig >= CURDATE()) " .
+            "ORDER BY c.nombre, g.nombre, g.seccion"
+        );
+        $stmt->execute([$idCredenciales]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function createCourse(array $data): array
     {
         $nombre      = trim((string)($data['nombre'] ?? ''));

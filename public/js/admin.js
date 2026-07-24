@@ -28,6 +28,55 @@
     return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/cursos.php';
   }
 
+
+  function getIncidenciasApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/incidencias.php';
+  }
+
+
+  function getMensajesApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/mensajes.php';
+  }
+
+
+  function getPlantillasApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/plantillas.php';
+  }
+
+  async function updateNotificationBadge() {
+    const badge = document.getElementById('navbar-notification-count');
+    if (!badge) return;
+    try {
+      const response = await fetch(`${getMensajesApiUrl()}?action=notifications`, {
+        cache: 'no-store',
+        credentials: 'same-origin'
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        const count = Number(result.data?.no_leidos || 0);
+        badge.textContent = count;
+        badge.style.display = count > 0 ? '' : 'none';
+      }
+    } catch (error) {
+      console.error('No se pudo actualizar la campana de notificaciones:', error);
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function getCsrfToken() {
+    return window.currentSession && window.currentSession.csrfToken
+      ? window.currentSession.csrfToken
+      : '';
+  }
+
   /* ==========================================================================
      1. INFORMACIÓN PERSONAL
      ========================================================================== */
@@ -80,121 +129,228 @@
   }
 
   /* ==========================================================================
-     2. INCIDENCIAS: LISTA GLOBAL & REDACCIÓN
+     2. INCIDENCIAS: GESTIÓN ADMINISTRATIVA CON PERSISTENCIA MYSQL
      ========================================================================== */
   function renderIncidencias(container) {
     setPageTitle('Gestión Global de Incidencias');
-    const db = window.SchoolDB.getData();
 
-    function buildIncidentRows() {
-      let rows = '';
-      db.incidents.forEach(inc => {
-        const isResolved = inc.status === 'Resuelto';
-        rows += `
-          <tr>
-            <td style="font-weight: 600;">${inc.id}</td>
-            <td>${inc.date}</td>
-            <td>${inc.studentName}</td>
-            <td><strong>${inc.docentName}</strong></td>
-            <td>${inc.detail}</td>
-            <td>
-              <select class="control-select incident-status-select" data-id="${inc.id}" style="padding: 4px 8px; font-size: 12px; font-weight: 600;">
-                <option value="En Revisión" ${inc.status === 'En Revisión' ? 'selected' : ''}>En Revisión</option>
-                <option value="Resuelto" ${inc.status === 'Resuelto' ? 'selected' : ''}>Resuelto</option>
-              </select>
-            </td>
-          </tr>
-        `;
-      });
-      return rows;
-    }
-
-    let studentOptions = '';
-    db.students.forEach(st => {
-      studentOptions += `<option value="${st.name}">${st.name} (${st.grado})</option>`;
-    });
+    let incidencias = [];
 
     container.innerHTML = `
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 1.8fr;">
-        <!-- write panel -->
-        <div class="card card-accent">
-          <div class="card-header">
-            <h3 class="card-title">Redactar Incidencia Administrativa</h3>
+      <div class="financial-metrics" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px;">
+        <div class="metric-card"><div class="metric-details"><span class="metric-lbl">Total</span><span class="metric-val" id="inc-total">0</span></div></div>
+        <div class="metric-card"><div class="metric-details"><span class="metric-lbl">Prioridad alta</span><span class="metric-val" id="inc-alta">0</span></div></div>
+        <div class="metric-card"><div class="metric-details"><span class="metric-lbl">Prioridad media</span><span class="metric-val" id="inc-media">0</span></div></div>
+        <div class="metric-card"><div class="metric-details"><span class="metric-lbl">Prioridad baja</span><span class="metric-val" id="inc-baja">0</span></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h3 class="card-title">Incidencias enviadas por los docentes</h3>
+            <p style="font-size:12.5px; color:var(--neutral-medium); margin-top:4px;">Dirección puede revisar, reclasificar la prioridad o retirar registros incorrectos.</p>
           </div>
-          <form id="admin-inc-form" class="form-layout" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="form-group">
-              <label class="form-label-desc">Alumno Vinculado</label>
-              <select id="admin-inc-student" class="control-select" required>
-                <option value="" disabled selected>-- Elija un alumno --</option>
-                ${studentOptions}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label-desc">Descripción del Incidente</label>
-              <textarea id="admin-inc-detail" class="control-textarea" placeholder="Describa el hecho y las acciones tomadas..." required></textarea>
-            </div>
-            <div id="admin-inc-alert" class="badge badge-success" style="display:none; width: 100%; text-align: center;">✓ Incidencia registrada exitosamente.</div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Registrar Incidencia</button>
-          </form>
+          <button type="button" id="admin-inc-refresh" class="btn btn-secondary btn-sm">Actualizar</button>
         </div>
 
-        <!-- list panel -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Historial Global de Incidencias</h3>
-          </div>
-          <div class="table-responsive">
-            <table class="school-table">
-              <thead>
-                <tr>
-                  <th style="width: 70px;">ID</th>
-                  <th style="width: 90px;">Fecha</th>
-                  <th style="width: 150px;">Alumno</th>
-                  <th style="width: 130px;">Reportado por</th>
-                  <th>Detalles</th>
-                  <th style="width: 120px;">Estado</th>
-                </tr>
-              </thead>
-              <tbody id="admin-inc-tbody">
-                ${buildIncidentRows()}
-              </tbody>
-            </table>
-          </div>
+        <div style="display:grid; grid-template-columns:minmax(220px,1fr) 190px; gap:12px; margin-bottom:18px;">
+          <input type="search" id="admin-inc-search" class="control-input" placeholder="Buscar por alumno, docente o detalle...">
+          <select id="admin-inc-filter" class="control-select">
+            <option value="Todas">Todas las prioridades</option>
+            <option value="Alta">Alta</option>
+            <option value="Media">Media</option>
+            <option value="Baja">Baja</option>
+          </select>
+        </div>
+
+        <div id="admin-inc-alert" style="display:none; padding:10px; border-radius:6px; text-align:center; margin-bottom:14px;"></div>
+
+        <div class="table-responsive">
+          <table class="school-table">
+            <thead>
+              <tr>
+                <th style="width:65px;">ID</th>
+                <th style="width:105px;">Fecha</th>
+                <th style="width:175px;">Alumno</th>
+                <th style="width:165px;">Reportado por</th>
+                <th>Detalle</th>
+                <th style="width:130px;">Prioridad</th>
+                <th style="width:95px; text-align:center;">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="admin-inc-tbody">
+              <tr><td colspan="7" style="text-align:center;">Cargando incidencias...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     `;
 
-    // Handle status change
     const tbody = document.getElementById('admin-inc-tbody');
-    tbody.addEventListener('change', function(e) {
-      if (e.target && e.target.classList.contains('incident-status-select')) {
-        const incId = e.target.getAttribute('data-id');
-        const status = e.target.value;
-        window.SchoolDB.updateIncidentStatus(incId, status);
-        
-        // Re-read DB
-        const updatedDb = window.SchoolDB.getData();
-        tbody.innerHTML = buildIncidentRows();
+    const searchInput = document.getElementById('admin-inc-search');
+    const priorityFilter = document.getElementById('admin-inc-filter');
+    const refreshBtn = document.getElementById('admin-inc-refresh');
+    const alertBox = document.getElementById('admin-inc-alert');
+
+    function updateCounters() {
+      document.getElementById('inc-total').textContent = incidencias.length;
+      document.getElementById('inc-alta').textContent = incidencias.filter(i => i.prioridad === 'Alta').length;
+      document.getElementById('inc-media').textContent = incidencias.filter(i => i.prioridad === 'Media').length;
+      document.getElementById('inc-baja').textContent = incidencias.filter(i => i.prioridad === 'Baja').length;
+    }
+
+    function filteredIncidents() {
+      const term = searchInput.value.trim().toLowerCase();
+      const priority = priorityFilter.value;
+
+      return incidencias.filter(inc => {
+        const matchesPriority = priority === 'Todas' || inc.prioridad === priority;
+        const haystack = `${inc.alumno} ${inc.docente} ${inc.texto} ${inc.grado}`.toLowerCase();
+        return matchesPriority && (!term || haystack.includes(term));
+      });
+    }
+
+    function renderRows() {
+      const rows = filteredIncidents();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--neutral-medium);">No se encontraron incidencias.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(inc => `
+        <tr>
+          <td style="font-weight:600;">${escapeHtml(inc.id_incidencia)}</td>
+          <td>${escapeHtml(inc.fecha)}</td>
+          <td>
+            <strong>${escapeHtml(inc.alumno)}</strong>
+            <div style="font-size:11.5px; color:var(--neutral-medium);">${escapeHtml(inc.grado)}</div>
+          </td>
+          <td>${escapeHtml(inc.docente)}</td>
+          <td style="white-space:normal; line-height:1.45;">${escapeHtml(inc.texto)}</td>
+          <td>
+            <select class="control-select incident-priority-select" data-id="${escapeHtml(inc.id_incidencia)}" style="padding:5px 8px; font-size:12px; font-weight:600;">
+              <option value="Alta" ${inc.prioridad === 'Alta' ? 'selected' : ''}>Alta</option>
+              <option value="Media" ${inc.prioridad === 'Media' ? 'selected' : ''}>Media</option>
+              <option value="Baja" ${inc.prioridad === 'Baja' ? 'selected' : ''}>Baja</option>
+            </select>
+          </td>
+          <td style="text-align:center;">
+            <button type="button" class="btn btn-secondary btn-sm incident-delete-btn" style="border-color:#dc2626; color:#dc2626;" data-id="${escapeHtml(inc.id_incidencia)}" title="Eliminar incidencia">Eliminar</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function showAlert(message, success) {
+      alertBox.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      alertBox.textContent = message;
+      alertBox.style.display = 'block';
+      window.setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        ...options
+      });
+      const result = await response.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Error HTTP ${response.status}`);
+      }
+      return result;
+    }
+
+    async function loadIncidents() {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando incidencias...</td></tr>';
+      const result = await fetchJson(getIncidenciasApiUrl());
+      incidencias = Array.isArray(result.data) ? result.data : [];
+      updateCounters();
+      renderRows();
+    }
+
+    searchInput.addEventListener('input', renderRows);
+    priorityFilter.addEventListener('change', renderRows);
+
+    refreshBtn.addEventListener('click', async function() {
+      refreshBtn.disabled = true;
+      try {
+        await loadIncidents();
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        refreshBtn.disabled = false;
       }
     });
 
-    // Form Submission
-    const form = document.getElementById('admin-inc-form');
-    const alertBox = document.getElementById('admin-inc-alert');
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const student = document.getElementById('admin-inc-student').value;
-      const detail = document.getElementById('admin-inc-detail').value;
+    tbody.addEventListener('change', async function(e) {
+      const select = e.target.closest('.incident-priority-select');
+      if (!select) return;
 
-      window.SchoolDB.addIncident(student, 'Director Administrativo', detail);
-      
-      // Update view
-      const updatedDb = window.SchoolDB.getData();
-      tbody.innerHTML = buildIncidentRows();
+      const previous = incidencias.find(item => String(item.id_incidencia) === String(select.dataset.id));
+      const previousPriority = previous ? previous.prioridad : 'Media';
+      select.disabled = true;
 
-      form.reset();
-      alertBox.style.display = 'block';
-      setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+      try {
+        const result = await fetchJson(getIncidenciasApiUrl(), {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({
+            id_incidencia: Number(select.dataset.id),
+            prioridad: select.value
+          })
+        });
+
+        if (previous && result.data) {
+          previous.prioridad = result.data.prioridad;
+        }
+        updateCounters();
+        renderRows();
+        showAlert('✓ Prioridad actualizada correctamente.', true);
+      } catch (error) {
+        select.value = previousPriority;
+        showAlert(error.message, false);
+      } finally {
+        select.disabled = false;
+      }
+    });
+
+    tbody.addEventListener('click', async function(e) {
+      const button = e.target.closest('.incident-delete-btn');
+      if (!button) return;
+
+      const id = Number(button.dataset.id);
+      const record = incidencias.find(item => Number(item.id_incidencia) === id);
+      const label = record ? ` de ${record.alumno}` : '';
+      if (!window.confirm(`¿Eliminar la incidencia${label}? Esta acción no se puede deshacer.`)) return;
+
+      button.disabled = true;
+      try {
+        await fetchJson(getIncidenciasApiUrl(), {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({ id_incidencia: id })
+        });
+
+        incidencias = incidencias.filter(item => Number(item.id_incidencia) !== id);
+        updateCounters();
+        renderRows();
+        showAlert('✓ Incidencia eliminada correctamente.', true);
+      } catch (error) {
+        button.disabled = false;
+        showAlert(error.message, false);
+      }
+    });
+
+    loadIncidents().catch(error => {
+      showAlert(error.message, false);
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--danger);">No se pudo cargar el módulo.</td></tr>';
     });
   }
 
@@ -458,6 +614,7 @@
       <div class="card" style="margin-top: 24px;">
         <div class="card-header">
           <h3 class="card-title">Docentes registrados</h3>
+          <button type="button" class="btn btn-secondary btn-sm" id="show-teacher-credentials">Credenciales</button>
         </div>
         <div class="table-responsive">
           <table class="school-table">
@@ -477,11 +634,27 @@
           </table>
         </div>
       </div>
+
+      <div class="card" id="teacher-credentials-card" style="margin-top: 16px; display: none;">
+        <div class="card-header">
+          <h3 class="card-title">Credenciales de docentes</h3>
+          <span class="badge badge-warning">Contraseña inicial = usuario</span>
+        </div>
+        <div class="table-responsive">
+          <table class="school-table">
+            <thead><tr><th>Código</th><th>Docente</th><th>Usuario</th><th>Contraseña inicial</th><th>Rol</th></tr></thead>
+            <tbody id="teacher-credentials-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     `;
 
     const form = document.getElementById('add-docente-form');
     const alertBox = document.getElementById('docente-alert');
     const tbody = document.getElementById('docentes-registrados-tbody');
+    const credentialsButton = document.getElementById('show-teacher-credentials');
+    const credentialsCard = document.getElementById('teacher-credentials-card');
+    const credentialsTbody = document.getElementById('teacher-credentials-tbody');
 
     fetch(getDocentesApiUrl(), {
       method: 'GET',
@@ -536,6 +709,38 @@
           tbody.innerHTML = `<tr><td colspan="8">No fue posible cargar los docentes.</td></tr>`;
         });
     }
+
+    function renderTeacherCredentials() {
+      credentialsTbody.innerHTML = '<tr><td colspan="5">Cargando credenciales...</td></tr>';
+      fetch(`${getDocentesApiUrl()}?action=credentials`, { cache: 'no-store', credentials: 'same-origin' })
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(result => {
+          if (!result.success || !result.data.length) {
+            credentialsTbody.innerHTML = '<tr><td colspan="5">No hay credenciales de docentes registradas.</td></tr>';
+            return;
+          }
+          credentialsTbody.innerHTML = result.data.map(credential => `
+            <tr>
+              <td style="font-weight:600;">${credential.cod_docente}</td>
+              <td>${credential.nombre_completo}</td>
+              <td>${credential.username}</td>
+              <td>${credential.password_temporal}</td>
+              <td>${credential.rol}</td>
+            </tr>
+          `).join('');
+        })
+        .catch(() => { credentialsTbody.innerHTML = '<tr><td colspan="5">No fue posible cargar las credenciales.</td></tr>'; });
+    }
+
+    credentialsButton.addEventListener('click', function() {
+      const willShow = credentialsCard.style.display === 'none';
+      credentialsCard.style.display = willShow ? 'block' : 'none';
+      credentialsButton.textContent = willShow ? 'Ocultar credenciales' : 'Credenciales';
+      if (willShow) renderTeacherCredentials();
+    });
 
     tbody.addEventListener('click', function(e) {
       const btn = e.target.closest('[data-action="toggle-status"]');
@@ -618,6 +823,7 @@
           alertBox.className = 'badge badge-success';
           alertBox.style.display = 'block';
           renderRegisteredTeachers();
+          if (credentialsCard.style.display !== 'none') renderTeacherCredentials();
           setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
         })
         .catch(error => {
@@ -937,279 +1143,550 @@
   }
 
   /* ==========================================================================
-     6. MENSAJERÍA / NOTIFICACIONES (UGEL & DOCENTES TABS)
+     6. MENSAJERÍA / NOTIFICACIONES (ADMINISTRACIÓN)
      ========================================================================== */
   function renderMensajeria(container) {
     setPageTitle('Mensajería y Comunicados');
-    const db = window.SchoolDB.getData();
+
+    let contactos = [];
+    let contactoActivo = null;
 
     container.innerHTML = `
       <div class="tabs-container">
         <button class="tab-btn active" id="msg-tab-docentes">Mensajes con Docentes</button>
         <button class="tab-btn" id="msg-tab-ugel">Comunicaciones UGEL</button>
       </div>
-
-      <div id="msg-subview-container">
-        <!-- view loaded here -->
-      </div>
+      <div id="msg-alert" style="display:none; padding:10px; border-radius:6px; text-align:center; margin-bottom:14px;"></div>
+      <div id="msg-subview-container"><div class="card" style="text-align:center;">Cargando mensajería...</div></div>
     `;
 
     const btnDocentes = document.getElementById('msg-tab-docentes');
     const btnUgel = document.getElementById('msg-tab-ugel');
+    const sub = document.getElementById('msg-subview-container');
+    const alertBox = document.getElementById('msg-alert');
 
-    btnDocentes.addEventListener('click', function() {
-      switchMsgTab('docentes');
-    });
-    btnUgel.addEventListener('click', function() {
-      switchMsgTab('ugel');
-    });
+    function showAlert(message, success) {
+      alertBox.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      alertBox.textContent = message;
+      alertBox.style.display = 'block';
+      window.setTimeout(() => { alertBox.style.display = 'none'; }, 3500);
+    }
 
-    switchMsgTab('docentes');
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        ...options
+      });
+      const result = await response.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Error HTTP ${response.status}`);
+      }
+      return result;
+    }
 
-    function switchMsgTab(tabName) {
-      const activeTab = document.querySelector('.tabs-container .active');
-      if (activeTab) activeTab.classList.remove('active');
-      
-      const sub = document.getElementById('msg-subview-container');
+    function initials(name) {
+      return String(name || 'D')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part.charAt(0).toUpperCase())
+        .join('');
+    }
 
-      if (tabName === 'docentes') {
-        btnDocentes.classList.add('active');
-        
-        let messagesHtml = '';
-        db.messages.docentes.forEach(m => {
-          const isDirector = m.from === 'Director';
-          messagesHtml += `
-            <div class="msg-bubble ${isDirector ? 'msg-sent' : 'msg-received'}">
-              <strong>${m.from}</strong>
-              <div>${m.content}</div>
-              <div class="msg-time">${m.timestamp}</div>
+    function renderContacts() {
+      const list = document.getElementById('admin-msg-contact-list');
+      if (!list) return;
+
+      if (!contactos.length) {
+        list.innerHTML = '<li style="padding:18px; color:var(--neutral-medium); font-size:13px;">No hay docentes activos.</li>';
+        return;
+      }
+
+      list.innerHTML = contactos.map(contacto => `
+        <li class="contact-item ${contactoActivo?.username === contacto.username ? 'active' : ''}" data-username="${escapeHtml(contacto.username)}">
+          <div class="contact-avatar">${escapeHtml(initials(contacto.nombre_completo))}</div>
+          <div class="contact-details" style="min-width:0; flex:1;">
+            <div class="contact-name">${escapeHtml(contacto.nombre_completo)}</div>
+            <div class="contact-status">${escapeHtml(contacto.especialidad || contacto.cod_docente || 'Docente')}</div>
+          </div>
+          ${Number(contacto.no_leidos || 0) > 0 ? `<span class="badge badge-danger">${escapeHtml(contacto.no_leidos)}</span>` : ''}
+        </li>
+      `).join('');
+    }
+
+    function renderConversationShell() {
+      sub.innerHTML = `
+        <div class="chat-container">
+          <div class="chat-contacts-panel">
+            <div class="chat-contacts-header">Docentes Activos</div>
+            <ul class="contacts-list" id="admin-msg-contact-list"></ul>
+          </div>
+          <div class="chat-messages-panel">
+            <div class="chat-panel-header" id="admin-msg-header">
+              <span style="font-weight:700; font-size:14px; color:var(--primary-dark);">Seleccione un docente</span>
             </div>
-          `;
-        });
-
-        sub.innerHTML = `
-          <div class="chat-container">
-            <div class="chat-contacts-panel">
-              <div class="chat-contacts-header">Docentes Activos</div>
-              <ul class="contacts-list">
-                <li class="contact-item active">
-                  <div class="contact-avatar">CR</div>
-                  <div class="contact-details">
-                    <div class="contact-name">Prof. Carlos Rivas</div>
-                    <div class="contact-status">Matemática y Ciencia</div>
-                  </div>
-                </li>
-                <li class="contact-item" style="opacity: 0.6; cursor: not-allowed;">
-                  <div class="contact-avatar">AM</div>
-                  <div class="contact-details">
-                    <div class="contact-name">Prof. Ana Medina</div>
-                    <div class="contact-status">Desconectado</div>
-                  </div>
-                </li>
-                <li class="contact-item" style="opacity: 0.6; cursor: not-allowed;">
-                  <div class="contact-avatar">LL</div>
-                  <div class="contact-details">
-                    <div class="contact-name">Prof. Luis Lazo</div>
-                    <div class="contact-status">Desconectado</div>
-                  </div>
-                </li>
-              </ul>
+            <div class="messages-scroller" id="admin-chat-scroller">
+              <div style="padding:28px; text-align:center; color:var(--neutral-medium);">Seleccione un contacto para abrir la conversación.</div>
             </div>
-            
-            <div class="chat-messages-panel">
-              <div class="chat-panel-header">
-                <div class="chat-active-user">
-                  <div class="contact-avatar" style="width: 32px; height:32px; font-size:12px;">CR</div>
-                  <span style="font-weight:700; font-size:14px; color: var(--primary-dark);">Prof. Carlos Rivas</span>
-                </div>
-                <span class="badge badge-success">En Línea</span>
-              </div>
-              <div class="messages-scroller" id="admin-chat-scroller">
-                ${messagesHtml}
-              </div>
-              <div class="chat-input-panel">
-                <input type="text" id="admin-chat-input" class="chat-text-input" placeholder="Responder al docente...">
-                <button class="btn btn-primary" id="admin-chat-send-btn">Enviar</button>
-              </div>
+            <div class="chat-input-panel">
+              <input type="text" id="admin-chat-input" class="chat-text-input" maxlength="2000" placeholder="Escriba un mensaje..." disabled>
+              <button class="btn btn-primary" id="admin-chat-send-btn" disabled>Enviar</button>
             </div>
           </div>
-        `;
+        </div>
+      `;
+      renderContacts();
 
-        const chatScroller = document.getElementById('admin-chat-scroller');
-        const chatInput = document.getElementById('admin-chat-input');
-        const sendBtn = document.getElementById('admin-chat-send-btn');
-        
-        chatScroller.scrollTop = chatScroller.scrollHeight;
-
-        function sendMsg() {
-          const text = chatInput.value.trim();
-          if (!text) return;
-
-          const newM = window.SchoolDB.sendDocentMessage('Director', text);
-          
-          const bubble = document.createElement('div');
-          bubble.className = 'msg-bubble msg-sent';
-          bubble.innerHTML = `
-            <strong>${newM.from}</strong>
-            <div>${newM.content}</div>
-            <div class="msg-time">${newM.timestamp}</div>
-          `;
-          chatScroller.appendChild(bubble);
-          chatInput.value = '';
-          chatScroller.scrollTop = chatScroller.scrollHeight;
+      document.getElementById('admin-msg-contact-list').addEventListener('click', async function(e) {
+        const item = e.target.closest('.contact-item');
+        if (!item) return;
+        const contacto = contactos.find(c => c.username === item.dataset.username);
+        if (!contacto) return;
+        contactoActivo = contacto;
+        renderContacts();
+        try {
+          await loadConversation(contacto.username);
+        } catch (error) {
+          showAlert(error.message, false);
+          const scroller = document.getElementById('admin-chat-scroller');
+          if (scroller) {
+            scroller.innerHTML = '<div style="padding:28px; text-align:center; color:var(--danger);">No se pudo cargar la conversación.</div>';
+          }
         }
+      });
 
-        sendBtn.addEventListener('click', sendMsg);
-        chatInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') sendMsg();
-        });
+      const input = document.getElementById('admin-chat-input');
+      const sendBtn = document.getElementById('admin-chat-send-btn');
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    }
 
+    function renderMessages(messages, contacto) {
+      const scroller = document.getElementById('admin-chat-scroller');
+      const header = document.getElementById('admin-msg-header');
+      const input = document.getElementById('admin-chat-input');
+      const sendBtn = document.getElementById('admin-chat-send-btn');
+      if (!scroller || !header || !input || !sendBtn) return;
+
+      header.innerHTML = `
+        <div class="chat-active-user">
+          <div class="contact-avatar" style="width:32px; height:32px; font-size:12px;">${escapeHtml(initials(contacto.nombre_completo))}</div>
+          <div>
+            <div style="font-weight:700; font-size:14px; color:var(--primary-dark);">${escapeHtml(contacto.nombre_completo)}</div>
+            <div style="font-size:11.5px; color:var(--neutral-medium);">${escapeHtml(contacto.especialidad || contacto.cod_docente || 'Docente')}</div>
+          </div>
+        </div>
+        <span class="badge badge-success">Activo</span>
+      `;
+
+      if (!messages.length) {
+        scroller.innerHTML = '<div style="padding:28px; text-align:center; color:var(--neutral-medium);">No hay mensajes. Inicie la conversación.</div>';
       } else {
-        btnUgel.classList.add('active');
-
-        let ugelHtml = '';
-        db.messages.ugel.forEach(msg => {
-          ugelHtml += `
-            <div class="card" style="margin-bottom:16px;">
-              <div class="card-header" style="border:none; padding-bottom:0;">
-                <h4 style="font-weight:700; color:var(--primary-dark);">${msg.title}</h4>
-                <span style="font-size:11px; color:var(--neutral-medium);">${msg.date}</span>
-              </div>
-              <div style="padding:16px; font-size: 13.5px; line-height: 1.5;">
-                <p style="margin-bottom:10px;"><strong>Remitente:</strong> ${msg.sender}</p>
-                <div style="background-color: var(--neutral-bg-hover); padding: 12px; border-radius: var(--radius-md); border:1px solid var(--neutral-light);">
-                  ${msg.content}
-                </div>
-              </div>
+        const currentUsername = window.currentSession?.email || '';
+        scroller.innerHTML = messages.map(message => {
+          const sent = message.emisor === currentUsername;
+          return `
+            <div class="msg-bubble ${sent ? 'msg-sent' : 'msg-received'}">
+              <strong>${escapeHtml(sent ? 'Dirección' : contacto.nombre_completo)}</strong>
+              <div>${escapeHtml(message.mensaje)}</div>
+              <div class="msg-time">${escapeHtml(message.fecha_envio)}</div>
             </div>
           `;
-        });
+        }).join('');
+      }
+      input.disabled = false;
+      sendBtn.disabled = false;
+      scroller.scrollTop = scroller.scrollHeight;
+    }
 
-        sub.innerHTML = `
-          <div style="max-width: 800px; margin: 0 auto;">
-            <div class="badge badge-info" style="display:flex; align-items:center; gap:8px; padding:12px; margin-bottom:20px; font-size:13px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              Buzón oficial conectado con la Mesa de Partes Virtual de la UGEL 03 - Minedu.
-            </div>
-            ${ugelHtml}
-          </div>
-        `;
+    async function loadContacts() {
+      const result = await fetchJson(`${getMensajesApiUrl()}?action=contacts`);
+      contactos = Array.isArray(result.data) ? result.data : [];
+      renderContacts();
+
+      if (contactos.length) {
+        const preferred = contactoActivo
+          ? contactos.find(c => c.username === contactoActivo.username)
+          : contactos[0];
+        contactoActivo = preferred || contactos[0];
+        renderContacts();
+        await loadConversation(contactoActivo.username);
       }
     }
+
+    async function loadConversation(username) {
+      const scroller = document.getElementById('admin-chat-scroller');
+      if (scroller) scroller.innerHTML = '<div style="padding:28px; text-align:center;">Cargando conversación...</div>';
+      const result = await fetchJson(`${getMensajesApiUrl()}?action=conversation&with=${encodeURIComponent(username)}`);
+      renderMessages(Array.isArray(result.data?.mensajes) ? result.data.mensajes : [], contactoActivo);
+      if (contactoActivo) contactoActivo.no_leidos = 0;
+      renderContacts();
+      updateNotificationBadge();
+    }
+
+    async function sendMessage() {
+      if (!contactoActivo) return;
+      const input = document.getElementById('admin-chat-input');
+      const sendBtn = document.getElementById('admin-chat-send-btn');
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.disabled = true;
+      sendBtn.disabled = true;
+      try {
+        await fetchJson(getMensajesApiUrl(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({
+            destinatario: contactoActivo.username,
+            mensaje: text
+          })
+        });
+        input.value = '';
+        await loadConversation(contactoActivo.username);
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    async function showDocentes() {
+      btnDocentes.classList.add('active');
+      btnUgel.classList.remove('active');
+      renderConversationShell();
+      try {
+        await loadContacts();
+      } catch (error) {
+        showAlert(error.message, false);
+        sub.innerHTML = '<div class="card" style="text-align:center; color:var(--danger);">No se pudo cargar la mensajería.</div>';
+      }
+    }
+
+    async function showUgel() {
+      btnUgel.classList.add('active');
+      btnDocentes.classList.remove('active');
+      sub.innerHTML = '<div class="card" style="text-align:center;">Cargando comunicaciones UGEL...</div>';
+      try {
+        const result = await fetchJson(`${getMensajesApiUrl()}?action=ugel`);
+        const messages = Array.isArray(result.data) ? result.data : [];
+        sub.innerHTML = `
+          <div style="max-width:850px; margin:0 auto;">
+            <div class="badge badge-info" style="display:flex; align-items:center; gap:8px; padding:12px; margin-bottom:20px; font-size:13px;">
+              Buzón de comunicaciones oficiales registradas en la base de datos.
+            </div>
+            ${messages.length ? messages.map(msg => `
+              <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                  <h4 style="font-weight:700; color:var(--primary-dark);">Comunicado de ${escapeHtml(msg.emisor)}</h4>
+                  <span style="font-size:11px; color:var(--neutral-medium);">${escapeHtml(msg.fecha_envio)}</span>
+                </div>
+                <div style="font-size:13.5px; line-height:1.6; white-space:pre-wrap;">${escapeHtml(msg.mensaje)}</div>
+              </div>
+            `).join('') : '<div class="card" style="text-align:center; color:var(--neutral-medium);">No existen comunicaciones UGEL registradas.</div>'}
+          </div>
+        `;
+      } catch (error) {
+        showAlert(error.message, false);
+        sub.innerHTML = '<div class="card" style="text-align:center; color:var(--danger);">No se pudieron cargar las comunicaciones.</div>';
+      }
+    }
+
+    btnDocentes.addEventListener('click', showDocentes);
+    btnUgel.addEventListener('click', showUgel);
+    showDocentes();
   }
 
   /* ==========================================================================
-     5. PLANTILLAS DE DOCUMENTOS (GESTOR PARA UGEL)
+     5. PLANTILLAS OFICIALES ALMACENADAS EN MYSQL
      ========================================================================== */
   function renderPlantillas(container) {
     setPageTitle('Gestor de Plantillas UGEL');
 
+    let plantillas = [];
+
     container.innerHTML = `
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">Plantillas y Documentos Oficiales</h3>
-        </div>
-        <p style="font-size: 13.5px; color: var(--neutral-medium); margin-bottom: 20px;">
-          Descargue o genere automáticamente los documentos oficiales listos para reportar a la UGEL.
-        </p>
-
-        <div class="table-responsive">
-          <table class="school-table">
-            <thead>
-              <tr>
-                <th>Código Documental</th>
-                <th>Nombre del Formato</th>
-                <th>Frecuencia</th>
-                <th>Formato</th>
-                <th style="text-align: center; width: 220px;">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="font-weight:600;">UGEL-F01</td>
-                <td>Consolidado Semestral de Calificaciones Académicas</td>
-                <td>Bimestral</td>
-                <td><span class="badge badge-primary">Excel (XLSX)</span></td>
-                <td style="text-align: center;">
-                  <button class="btn btn-secondary btn-sm btn-generate-doc" data-doc="Consolidado Semestral">Generar Reporte</button>
-                </td>
-              </tr>
-              <tr>
-                <td style="font-weight:600;">UGEL-F02</td>
-                <td>Rendimiento de Gastos por Mantenimiento de Infraestructura</td>
-                <td>Trimestral</td>
-                <td><span class="badge badge-warning">Word (DOCX)</span></td>
-                <td style="text-align: center;">
-                  <button class="btn btn-secondary btn-sm btn-generate-doc" data-doc="Rendimiento de Gastos">Generar Reporte</button>
-                </td>
-              </tr>
-              <tr>
-                <td style="font-weight:600;">UGEL-F03</td>
-                <td>Reporte Consolidado de Asistencia y Deserción Escolar</td>
-                <td>Mensual</td>
-                <td><span class="badge badge-danger">PDF</span></td>
-                <td style="text-align: center;">
-                  <button class="btn btn-secondary btn-sm btn-generate-doc" data-doc="Consolidado de Asistencia">Generar Reporte</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- modal or progress indicator overlay -->
-      <div id="progress-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center;">
-        <div class="card" style="width: 320px; text-align: center;">
-          <h3 id="progress-title" style="margin-bottom:12px;">Generando Archivo...</h3>
-          <div style="background-color: var(--neutral-light); height: 8px; border-radius: 4px; overflow:hidden; margin-bottom:16px;">
-            <div id="progress-bar-fill" style="background-color: var(--primary-orange); height:100%; width:0%; transition: width 0.1s linear;"></div>
+      <div class="dashboard-grid" style="grid-template-columns:minmax(300px,0.8fr) minmax(520px,1.7fr);">
+        <div class="card card-accent">
+          <div class="card-header">
+            <h3 class="card-title">Cargar Plantilla Oficial</h3>
           </div>
-          <span id="progress-pct" style="font-weight: 700; color: var(--primary-dark);">0%</span>
+          <form id="template-upload-form" style="display:flex; flex-direction:column; gap:16px;">
+            <div class="form-group">
+              <label class="form-label-desc" for="template-category">Categoría</label>
+              <select id="template-category" name="categoria" class="control-select" required>
+                <option value="" disabled selected>-- Seleccione categoría --</option>
+                <option value="Académica">Académica</option>
+                <option value="Asistencia">Asistencia</option>
+                <option value="Administrativa">Administrativa</option>
+                <option value="Económica">Económica</option>
+                <option value="UGEL">UGEL</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label-desc" for="template-file">Archivo</label>
+              <input id="template-file" name="archivo" type="file" class="control-input" accept=".pdf,.doc,.docx,.xls,.xlsx" required>
+              <small style="display:block; margin-top:7px; color:var(--neutral-medium); line-height:1.4;">PDF, Word o Excel. Máximo 64 KB por el tipo BLOB definido en la base y nombre de hasta 50 caracteres.</small>
+            </div>
+            <div id="template-progress-wrap" style="display:none;">
+              <div style="height:8px; background:var(--neutral-light); border-radius:6px; overflow:hidden;">
+                <div id="template-progress-bar" style="height:100%; width:0%; background:var(--primary-orange); transition:width .15s;"></div>
+              </div>
+              <div id="template-progress-text" style="font-size:12px; text-align:center; margin-top:6px;">0%</div>
+            </div>
+            <div id="template-alert" style="display:none; padding:10px; border-radius:6px; text-align:center;"></div>
+            <button type="submit" id="template-submit-btn" class="btn btn-primary">Subir a la Base de Datos</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header" style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+            <div>
+              <h3 class="card-title">Plantillas y Documentos Oficiales</h3>
+              <p style="font-size:12.5px; color:var(--neutral-medium); margin-top:4px;">Los archivos se descargan directamente desde la base de datos.</p>
+            </div>
+            <button type="button" id="template-refresh-btn" class="btn btn-secondary btn-sm">Actualizar</button>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 190px; gap:12px; margin-bottom:18px;">
+            <input type="search" id="template-search" class="control-input" placeholder="Buscar plantilla...">
+            <select id="template-filter" class="control-select">
+              <option value="Todas">Todas las categorías</option>
+              <option value="Académica">Académica</option>
+              <option value="Asistencia">Asistencia</option>
+              <option value="Administrativa">Administrativa</option>
+              <option value="Económica">Económica</option>
+              <option value="UGEL">UGEL</option>
+            </select>
+          </div>
+          <div class="table-responsive">
+            <table class="school-table">
+              <thead>
+                <tr>
+                  <th style="width:70px;">ID</th>
+                  <th>Nombre del Archivo</th>
+                  <th style="width:150px;">Categoría</th>
+                  <th style="width:100px;">Tamaño</th>
+                  <th style="width:190px; text-align:center;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="template-tbody">
+                <tr><td colspan="5" style="text-align:center;">Cargando plantillas...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     `;
 
-    const btns = container.querySelectorAll('.btn-generate-doc');
-    const overlay = document.getElementById('progress-overlay');
-    const fill = document.getElementById('progress-bar-fill');
-    const pct = document.getElementById('progress-pct');
-    const title = document.getElementById('progress-title');
+    const form = document.getElementById('template-upload-form');
+    const fileInput = document.getElementById('template-file');
+    const categoryInput = document.getElementById('template-category');
+    const submitBtn = document.getElementById('template-submit-btn');
+    const refreshBtn = document.getElementById('template-refresh-btn');
+    const tbody = document.getElementById('template-tbody');
+    const searchInput = document.getElementById('template-search');
+    const filterInput = document.getElementById('template-filter');
+    const alertBox = document.getElementById('template-alert');
+    const progressWrap = document.getElementById('template-progress-wrap');
+    const progressBar = document.getElementById('template-progress-bar');
+    const progressText = document.getElementById('template-progress-text');
 
-    btns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        const docName = this.getAttribute('data-doc');
-        
-        overlay.style.display = 'flex';
-        fill.style.width = '0%';
-        pct.textContent = '0%';
-        title.textContent = `Generando ${docName}...`;
+    function formatBytes(bytes) {
+      const value = Number(bytes || 0);
+      if (value < 1024) return `${value} B`;
+      if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+      return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+    }
 
-        let currentPct = 0;
-        const interval = setInterval(() => {
-          currentPct += 5;
-          fill.style.width = `${currentPct}%`;
-          pct.textContent = `${currentPct}%`;
-          
-          if (currentPct >= 100) {
-            clearInterval(interval);
-            title.textContent = '✓ ¡Generado con Éxito!';
-            
-            // Simular descarga
-            setTimeout(() => {
-              overlay.style.display = 'none';
-              
-              // Trigger simple text file download to simulate generated report
-              const blob = new Blob([`Reporte UGEL IEP Corazon de Jesus - ${docName} - Generado el ${new Date().toLocaleDateString()}`], {type: "text/plain;charset=utf-8"});
-              const dlAnchor = document.createElement('a');
-              dlAnchor.href = URL.createObjectURL(blob);
-              dlAnchor.download = `${docName.replace(/\s+/g, '_')}_UGEL_Reporte.txt`;
-              document.body.appendChild(dlAnchor);
-              dlAnchor.click();
-              document.body.removeChild(dlAnchor);
-            }, 1000);
-          }
-        }, 100);
+    function extensionBadge(name) {
+      const ext = String(name || '').split('.').pop().toUpperCase();
+      if (ext === 'PDF') return 'badge-danger';
+      if (ext === 'XLS' || ext === 'XLSX') return 'badge-success';
+      return 'badge-primary';
+    }
+
+    function filteredTemplates() {
+      const term = searchInput.value.trim().toLowerCase();
+      const category = filterInput.value;
+      return plantillas.filter(item => {
+        const matchesCategory = category === 'Todas' || item.categoria === category;
+        const matchesTerm = !term || `${item.nombre} ${item.categoria}`.toLowerCase().includes(term);
+        return matchesCategory && matchesTerm;
       });
+    }
+
+    function renderRows() {
+      const rows = filteredTemplates();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--neutral-medium);">No existen plantillas para mostrar.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(item => {
+        const ext = String(item.nombre || '').split('.').pop().toUpperCase();
+        const downloadUrl = `${getPlantillasApiUrl()}?action=download&id=${encodeURIComponent(item.id_plantilla)}`;
+        return `
+          <tr>
+            <td style="font-weight:600;">${escapeHtml(item.id_plantilla)}</td>
+            <td>
+              <strong>${escapeHtml(item.nombre)}</strong>
+              <span class="badge ${extensionBadge(item.nombre)}" style="margin-left:7px;">${escapeHtml(ext)}</span>
+            </td>
+            <td>${escapeHtml(item.categoria)}</td>
+            <td>${escapeHtml(formatBytes(item.tamano_bytes))}</td>
+            <td style="text-align:center; white-space:nowrap;">
+              <a class="btn btn-primary btn-sm" href="${downloadUrl}">Descargar</a>
+              <button type="button" class="btn btn-secondary btn-sm template-delete-btn" data-id="${escapeHtml(item.id_plantilla)}" style="border-color:#dc2626; color:#dc2626;">Eliminar</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function showAlert(message, success) {
+      alertBox.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      alertBox.textContent = message;
+      alertBox.style.display = 'block';
+      window.setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, { cache:'no-store', credentials:'same-origin', ...options });
+      const result = await response.json().catch(() => ({ success:false, message:'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) throw new Error(result.message || `Error HTTP ${response.status}`);
+      return result;
+    }
+
+    async function loadTemplates() {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando plantillas...</td></tr>';
+      const result = await fetchJson(getPlantillasApiUrl());
+      plantillas = Array.isArray(result.data) ? result.data : [];
+      renderRows();
+    }
+
+    function uploadTemplate(formData) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', getPlantillasApiUrl(), true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('X-CSRF-Token', getCsrfToken());
+
+        xhr.upload.addEventListener('progress', event => {
+          if (!event.lengthComputable) return;
+          const pct = Math.round((event.loaded / event.total) * 100);
+          progressBar.style.width = `${pct}%`;
+          progressText.textContent = `${pct}%`;
+        });
+
+        xhr.addEventListener('load', () => {
+          let result;
+          try {
+            result = JSON.parse(xhr.responseText);
+          } catch (error) {
+            reject(new Error('Respuesta inválida del servidor.'));
+            return;
+          }
+          if (xhr.status < 200 || xhr.status >= 300 || !result.success) {
+            reject(new Error(result.message || `Error HTTP ${xhr.status}`));
+            return;
+          }
+          resolve(result);
+        });
+        xhr.addEventListener('error', () => reject(new Error('No fue posible conectar con el servidor.')));
+        xhr.send(formData);
+      });
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) {
+        showAlert('Seleccione un archivo.', false);
+        return;
+      }
+      if (file.size > 65535) {
+        showAlert('El archivo supera 64 KB, límite de la columna BLOB de la base de datos.', false);
+        return;
+      }
+      if (file.name.length > 50) {
+        showAlert('El nombre del archivo no puede superar 50 caracteres.', false);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      progressWrap.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+
+      const formData = new FormData();
+      formData.append('categoria', categoryInput.value);
+      formData.append('archivo', file);
+
+      try {
+        await uploadTemplate(formData);
+        progressBar.style.width = '100%';
+        progressText.textContent = '100%';
+        form.reset();
+        showAlert('✓ Plantilla almacenada correctamente en MySQL.', true);
+        await loadTemplates();
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        submitBtn.disabled = false;
+        window.setTimeout(() => { progressWrap.style.display = 'none'; }, 700);
+      }
+    });
+
+    refreshBtn.addEventListener('click', async function() {
+      refreshBtn.disabled = true;
+      try { await loadTemplates(); }
+      catch (error) { showAlert(error.message, false); }
+      finally { refreshBtn.disabled = false; }
+    });
+
+    searchInput.addEventListener('input', renderRows);
+    filterInput.addEventListener('change', renderRows);
+
+    tbody.addEventListener('click', async function(e) {
+      const button = e.target.closest('.template-delete-btn');
+      if (!button) return;
+      const id = Number(button.dataset.id);
+      const item = plantillas.find(row => Number(row.id_plantilla) === id);
+      if (!window.confirm(`¿Eliminar la plantilla ${item ? item.nombre : ''}?`)) return;
+
+      button.disabled = true;
+      try {
+        await fetchJson(getPlantillasApiUrl(), {
+          method:'DELETE',
+          headers:{
+            'Content-Type':'application/json',
+            'X-CSRF-Token':getCsrfToken()
+          },
+          body:JSON.stringify({ id_plantilla:id })
+        });
+        plantillas = plantillas.filter(row => Number(row.id_plantilla) !== id);
+        renderRows();
+        showAlert('✓ Plantilla eliminada correctamente.', true);
+      } catch (error) {
+        button.disabled = false;
+        showAlert(error.message, false);
+      }
+    });
+
+    loadTemplates().catch(error => {
+      showAlert(error.message, false);
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger);">No se pudo cargar el módulo.</td></tr>';
     });
   }
 
@@ -1669,6 +2146,9 @@
     // Initial loading from database
     loadEconomicsData();
   }
+
+  updateNotificationBadge();
+  window.setInterval(updateNotificationBadge, 30000);
 
   // Expose methods globally for Router config in admin.html
   window.AdminModule = {

@@ -24,7 +24,7 @@
       name: "<?php echo htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Usuario'); ?>",
       email: "<?php echo htmlspecialchars($_SESSION['usuario_email'] ?? ''); ?>",
       role: "<?php echo htmlspecialchars($_SESSION['rol_nombre'] ?? ''); ?>",
-      idDocente: <?php echo isset($_SESSION['id_docente']) ? (int)$_SESSION['id_docente'] : 'null'; ?>
+      csrfToken: "<?php echo Security::generarTokenCSRF(); ?>"
     };
   </script>
   

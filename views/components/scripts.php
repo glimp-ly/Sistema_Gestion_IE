@@ -57,6 +57,15 @@ $scriptNombre = $moduleScript ?? 'admin.js';
       });
     }
 
+    // La campana abre el módulo de mensajería correspondiente al rol.
+    const notificationBell = document.querySelector('.notification-bell');
+    if (notificationBell) {
+      notificationBell.style.cursor = 'pointer';
+      notificationBell.addEventListener('click', function() {
+        window.location.hash = <?php echo $scriptNombre === 'docente.js' ? "'#info-personal'" : "'#mensajeria'"; ?>;
+      });
+    }
+
     // 3. Definición y asociación de Rutas SPA
     <?php if ($scriptNombre === 'docente.js'): ?>
       const routes = {

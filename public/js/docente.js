@@ -20,44 +20,69 @@
     if (el) el.textContent = title;
   }
 
-  // Función auxiliar para construir URLs de la API de forma robusta
-  function getApiUrl(endpoint) {
-    let base = typeof BASE_URL !== 'undefined' ? BASE_URL : '/';
-    if (!base.endsWith('/')) base += '/';
-    try {
-      return new URL(endpoint.replace(/^\//, ''), base).toString();
-    } catch(e) {
-      return new URL(endpoint.replace(/^\//, ''), window.location.origin + base).toString();
-    }
+  function getCursosApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/cursos.php';
+  }
+
+  function getIncidenciasApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/incidencias.php';
   }
 
 
+  function getMensajesApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/mensajes.php';
+  }
+
+
+  function getActividadesApiUrl() {
+    return (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + 'public/api/actividades.php';
+  }
+
+  async function updateNotificationBadge() {
+    const badge = document.getElementById('navbar-notification-count');
+    if (!badge) return;
+    try {
+      const response = await fetch(`${getMensajesApiUrl()}?action=notifications`, {
+        cache: 'no-store',
+        credentials: 'same-origin'
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        const count = Number(result.data?.no_leidos || 0);
+        badge.textContent = count;
+        badge.style.display = count > 0 ? '' : 'none';
+      }
+    } catch (error) {
+      console.error('No se pudo actualizar la campana de notificaciones:', error);
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function getCsrfToken() {
+    return window.currentSession && window.currentSession.csrfToken
+      ? window.currentSession.csrfToken
+      : '';
+  }
+
   /* ==========================================================================
-     1. INFORMACIÓN PERSONAL & MENSAJERÍA
+     1. INFORMACIÓN PERSONAL & MENSAJERÍA CON DIRECCIÓN
      ========================================================================== */
   function renderInfoPersonal(container) {
     setPageTitle('Información Personal y Mensajería');
-    
-    const db = window.SchoolDB.getData();
-    const session = window.SchoolAuth.getSession() || { name: 'Prof. Carlos Rivas', email: 'carlos.rivas@colegio.edu.pe' };
-    
-    let chatHtml = '';
-    const myMessages = db.messages.docentes.filter(m => m.from === 'Prof. Carlos Rivas' || m.to === 'Prof. Carlos Rivas');
-    
-    myMessages.forEach(msg => {
-      const isMe = msg.from === 'Prof. Carlos Rivas';
-      chatHtml += `
-        <div class="msg-bubble ${isMe ? 'msg-sent' : 'msg-received'}">
-          <strong>${msg.from}</strong>
-          <div>${msg.content}</div>
-          <div class="msg-time">${msg.timestamp}</div>
-        </div>
-      `;
-    });
+
+    const session = window.SchoolAuth.getSession() || { name: 'Docente', email: '' };
+    let director = null;
 
     container.innerHTML = `
       <div class="dashboard-grid" style="grid-template-columns: 1fr 1.2fr;">
-        <!-- Left: Form to update data -->
         <div class="card card-accent">
           <div class="card-header">
             <h3 class="card-title">
@@ -65,51 +90,44 @@
               Actualizar Datos de Docente
             </h3>
           </div>
-          <form id="docent-info-form" class="form-layout" style="display: flex; flex-direction: column; gap: 14px;">
+          <form id="docent-info-form" class="form-layout" style="display:flex; flex-direction:column; gap:14px;">
             <div class="form-group">
               <label class="form-label-desc">Nombre Completo</label>
-              <input type="text" class="control-input" value="${session.name}" disabled>
+              <input type="text" class="control-input" value="${escapeHtml(session.name)}" disabled>
             </div>
             <div class="form-group">
-              <label class="form-label-desc">Correo Electrónico</label>
-              <input type="email" id="docent-email" class="control-input" value="${session.email}">
+              <label class="form-label-desc">Usuario</label>
+              <input type="text" class="control-input" value="${escapeHtml(session.email)}" disabled>
             </div>
             <div class="form-group">
               <label class="form-label-desc">Teléfono de Contacto</label>
-              <input type="text" id="docent-phone" class="control-input" value="987 654 321">
+              <input type="text" id="docent-phone" class="control-input" placeholder="Ingrese teléfono">
             </div>
             <div class="form-group">
               <label class="form-label-desc">Dirección de Domicilio</label>
-              <input type="text" id="docent-address" class="control-input" value="Av. San Martín 456, Pueblo Libre">
-            </div>
-            <div class="form-group">
-              <label class="form-label-desc">Especialidades</label>
-              <input type="text" class="control-input" value="Matemática y Ciencias Naturales" disabled>
+              <input type="text" id="docent-address" class="control-input" placeholder="Ingrese dirección">
             </div>
             <div id="form-alert-container"></div>
-            <button type="submit" class="btn btn-primary" style="margin-top: 10px; width: 100%;">
-              Guardar Cambios
-            </button>
+            <button type="submit" class="btn btn-primary" style="margin-top:10px; width:100%;">Guardar Cambios</button>
           </form>
         </div>
 
-        <!-- Right: Message with Director -->
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">
               <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               Mensajería Interna con Dirección
             </h3>
-            <span class="badge badge-info">Director Conectado</span>
+            <span class="badge badge-info" id="docent-director-label">Cargando...</span>
           </div>
-          
-          <div class="chat-messages-panel" style="border: 1px solid var(--neutral-light); border-radius: var(--radius-md); overflow: hidden;">
-            <div class="messages-scroller" id="docent-chat-scroller" style="height: 300px;">
-              ${chatHtml}
+          <div id="docent-chat-alert" style="display:none; padding:10px; border-radius:6px; text-align:center; margin-bottom:12px;"></div>
+          <div class="chat-messages-panel" style="border:1px solid var(--neutral-light); border-radius:var(--radius-md); overflow:hidden;">
+            <div class="messages-scroller" id="docent-chat-scroller" style="height:300px;">
+              <div style="padding:28px; text-align:center; color:var(--neutral-medium);">Cargando conversación...</div>
             </div>
             <div class="chat-input-panel">
-              <input type="text" id="docent-chat-input" class="chat-text-input" placeholder="Escriba un mensaje al Director...">
-              <button class="btn btn-primary" id="docent-chat-send-btn">
+              <input type="text" id="docent-chat-input" maxlength="2000" class="chat-text-input" placeholder="Escriba un mensaje a Dirección..." disabled>
+              <button class="btn btn-primary" id="docent-chat-send-btn" disabled>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
               </button>
             </div>
@@ -118,63 +136,113 @@
       </div>
     `;
 
-    // Handle profile update submit
-    const form = document.getElementById('docent-info-form');
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const alertContainer = document.getElementById('form-alert-container');
-      alertContainer.innerHTML = `
-        <div class="badge badge-success" style="padding: 10px; width: 100%; border-radius: 6px; text-align: center;">
-          ✓ Datos guardados exitosamente.
-        </div>
-      `;
-      setTimeout(() => { alertContainer.innerHTML = ''; }, 3000);
-    });
-
-    // Handle Send Message
+    const profileForm = document.getElementById('docent-info-form');
     const chatInput = document.getElementById('docent-chat-input');
     const sendBtn = document.getElementById('docent-chat-send-btn');
     const chatScroller = document.getElementById('docent-chat-scroller');
-    
-    // Auto-scroll chat to bottom
-    chatScroller.scrollTop = chatScroller.scrollHeight;
+    const chatAlert = document.getElementById('docent-chat-alert');
+    const directorLabel = document.getElementById('docent-director-label');
 
-    function sendMessage() {
+    profileForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const alertContainer = document.getElementById('form-alert-container');
+      alertContainer.innerHTML = '<div class="badge badge-info" style="padding:10px; width:100%; text-align:center;">La edición del perfil pertenece al módulo de usuarios.</div>';
+      window.setTimeout(() => { alertContainer.innerHTML = ''; }, 3500);
+    });
+
+    function showChatAlert(message, success) {
+      chatAlert.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      chatAlert.textContent = message;
+      chatAlert.style.display = 'block';
+      window.setTimeout(() => { chatAlert.style.display = 'none'; }, 3500);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        ...options
+      });
+      const result = await response.json().catch(() => ({ success:false, message:'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Error HTTP ${response.status}`);
+      }
+      return result;
+    }
+
+    function renderMessages(messages) {
+      if (!messages.length) {
+        chatScroller.innerHTML = '<div style="padding:28px; text-align:center; color:var(--neutral-medium);">No hay mensajes. Puede iniciar la conversación.</div>';
+      } else {
+        const currentUsername = window.currentSession?.email || '';
+        chatScroller.innerHTML = messages.map(message => {
+          const sent = message.emisor === currentUsername;
+          return `
+            <div class="msg-bubble ${sent ? 'msg-sent' : 'msg-received'}">
+              <strong>${escapeHtml(sent ? session.name : director?.nombre_completo || 'Dirección')}</strong>
+              <div>${escapeHtml(message.mensaje)}</div>
+              <div class="msg-time">${escapeHtml(message.fecha_envio)}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      chatScroller.scrollTop = chatScroller.scrollHeight;
+    }
+
+    async function loadConversation() {
+      const directorResult = await fetchJson(`${getMensajesApiUrl()}?action=director`);
+      director = directorResult.data;
+      directorLabel.textContent = director?.nombre_completo || 'Dirección';
+      const conversationResult = await fetchJson(`${getMensajesApiUrl()}?action=conversation&with=${encodeURIComponent(director.username)}`);
+      renderMessages(Array.isArray(conversationResult.data?.mensajes) ? conversationResult.data.mensajes : []);
+      chatInput.disabled = false;
+      sendBtn.disabled = false;
+      updateNotificationBadge();
+    }
+
+    async function sendMessage() {
+      if (!director) return;
       const text = chatInput.value.trim();
       if (!text) return;
 
-      const newMsg = window.SchoolDB.sendDocentMessage('Prof. Carlos Rivas', text);
-      
-      // Append bubble in UI
-      const bubble = document.createElement('div');
-      bubble.className = 'msg-bubble msg-sent';
-      bubble.innerHTML = `
-        <strong>${newMsg.from}</strong>
-        <div>${newMsg.content}</div>
-        <div class="msg-time">${newMsg.timestamp}</div>
-      `;
-      chatScroller.appendChild(bubble);
-      chatInput.value = '';
-      chatScroller.scrollTop = chatScroller.scrollHeight;
-
-      // Simulated Director Reply
-      setTimeout(() => {
-        const reply = window.SchoolDB.sendDocentMessage('Director', 'Entendido profesor Carlos. Estaré atendiendo su solicitud a la brevedad.');
-        const replyBubble = document.createElement('div');
-        replyBubble.className = 'msg-bubble msg-received';
-        replyBubble.innerHTML = `
-          <strong>${reply.from}</strong>
-          <div>${reply.content}</div>
-          <div class="msg-time">${reply.timestamp}</div>
-        `;
-        chatScroller.appendChild(replyBubble);
-        chatScroller.scrollTop = chatScroller.scrollHeight;
-      }, 2000);
+      chatInput.disabled = true;
+      sendBtn.disabled = true;
+      try {
+        await fetchJson(getMensajesApiUrl(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({
+            destinatario: director.username,
+            mensaje: text
+          })
+        });
+        chatInput.value = '';
+        const result = await fetchJson(`${getMensajesApiUrl()}?action=conversation&with=${encodeURIComponent(director.username)}`);
+        renderMessages(Array.isArray(result.data?.mensajes) ? result.data.mensajes : []);
+      } catch (error) {
+        showChatAlert(error.message, false);
+      } finally {
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        chatInput.focus();
+      }
     }
 
     sendBtn.addEventListener('click', sendMessage);
     chatInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') sendMessage();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    loadConversation().catch(error => {
+      showChatAlert(error.message, false);
+      directorLabel.textContent = 'No disponible';
+      chatScroller.innerHTML = '<div style="padding:28px; text-align:center; color:var(--danger);">No se pudo cargar la conversación.</div>';
     });
   }
 
@@ -185,20 +253,18 @@
     setPageTitle('Gestión de Cursos');
 
     const db = window.SchoolDB.getData();
-    let courseOptions = '';
-    db.courses.forEach(c => {
-      courseOptions += `<option value="${c.id}">${c.name}</option>`;
-    });
+    let assignedCourses = [];
 
     container.innerHTML = `
       <!-- selector top panel -->
       <div class="selector-panel">
         <label class="selector-label" for="course-picker">Seleccione Curso:</label>
         <select id="course-picker" class="control-select" style="max-width: 320px;">
-          <option value="" disabled selected>-- Elija un curso --</option>
-          ${courseOptions}
+          <option value="" disabled selected>-- Cargando cursos asignados... --</option>
         </select>
       </div>
+
+      <p id="assigned-courses-message" style="color: var(--neutral-medium); margin: 0 0 16px;"></p>
 
       <div id="course-content-area" style="display: none;">
         <div class="tabs-container">
@@ -218,6 +284,8 @@
     const tabGrades = document.getElementById('tab-grades');
     let activeCourseId = '';
     let currentTab = 'materials'; // materials | grades
+
+    loadAssignedTeacherCourses();
 
     coursePicker.addEventListener('change', function() {
       activeCourseId = this.value;
@@ -241,13 +309,14 @@
 
     function renderActiveTab() {
       const tabContainer = document.getElementById('tab-view-container');
-      const course = db.courses.find(c => c.id === activeCourseId);
+      const course = (window.assignedTeacherCourses || assignedCourses).find(c => String(c.id_curso) === activeCourseId);
+      if (!course) return;
       
       if (currentTab === 'materials') {
         tabContainer.innerHTML = `
           <div class="card card-accent" style="max-width: 600px;">
             <div class="card-header">
-              <h3 class="card-title">Descarga de Material Docente - ${course.name}</h3>
+              <h3 class="card-title">Descarga de Material Docente - ${course.nombre}</h3>
             </div>
             <p style="font-size: 13.5px; color: var(--neutral-medium); margin-bottom: 20px;">
               Descargue los documentos base para el desarrollo del plan curricular académico vigente homologados por el Minedu.
@@ -289,7 +358,7 @@
         if (activeCourseId === 'CIEN5P') subjectKey = 'ciencia';
 
         // Filter students according to course level (Primaria or Inicial)
-        const relevantStudents = db.students.filter(s => s.nivel === course.nivel);
+        const relevantStudents = db.students;
         
         let tableRows = '';
         relevantStudents.forEach(st => {
@@ -314,7 +383,7 @@
         tabContainer.innerHTML = `
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">Registro de Calificaciones: ${course.name}</h3>
+              <h3 class="card-title">Registro de Calificaciones: ${course.nombre}</h3>
               <div id="grades-save-indicator" class="badge badge-success" style="display:none;">¡Notas guardadas automáticamente!</div>
             </div>
             
@@ -392,108 +461,402 @@
   }
 
   /* ==========================================================================
-     3. ACTIVIDADES: CALENDARIO ESCOLAR
+     3. ACTIVIDADES, CALENDARIO INSTITUCIONAL Y HORARIO DOCENTE
      ========================================================================== */
+  function loadAssignedTeacherCourses() {
+    const coursePicker = document.getElementById('course-picker');
+    const message = document.getElementById('assigned-courses-message');
+    if (!coursePicker || !message) return;
+
+    fetch(`${getCursosApiUrl()}?scope=mine`, { cache: 'no-store', credentials: 'same-origin' })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(result => {
+        if (!result.success) throw new Error(result.message);
+        window.assignedTeacherCourses = result.data || [];
+        if (!window.assignedTeacherCourses.length) {
+          coursePicker.innerHTML = '<option value="" selected>No tiene cursos asignados</option>';
+          message.textContent = 'Cuando Dirección le asigne un curso, aparecerá únicamente aquí.';
+          return;
+        }
+        coursePicker.innerHTML = '<option value="" disabled selected>-- Elija un curso asignado --</option>' + window.assignedTeacherCourses.map(course =>
+          `<option value="${course.id_curso}">${course.nombre} - ${course.nombre_grado} ${course.seccion}</option>`
+        ).join('');
+        message.textContent = 'Solo se muestran los cursos asignados a su cuenta.';
+      })
+      .catch(() => {
+        coursePicker.innerHTML = '<option value="" selected>No fue posible cargar sus cursos</option>';
+        message.textContent = 'Intente recargar la página.';
+      });
+  }
+
   function renderActividades(container) {
-    setPageTitle('Calendario de Actividades');
-    
-    // We render a standard static June 2026 calendar view
-    const db = window.SchoolDB.getData();
-    
-    // June 2026 starts on a Monday, has 30 days
-    const totalDays = 30;
-    const offset = 0; // Starts directly on Monday (June 1st)
-    
-    let calendarCells = '';
-    
-    // Pre-populate events by day
-    const eventsByDay = {};
-    db.calendarEvents.forEach(ev => {
-      if (ev.date.startsWith('2026-06')) {
-        const day = parseInt(ev.date.split('-')[2]);
-        if (!eventsByDay[day]) eventsByDay[day] = [];
-        eventsByDay[day].push(ev);
-      }
-    });
+    setPageTitle('Actividades, Calendario y Horario');
 
-    // Weekdays labels
-    const daysLabel = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-    let labelsHtml = '';
-    daysLabel.forEach(dl => {
-      labelsHtml += `<div class="calendar-day-name">${dl}</div>`;
-    });
-
-    for (let day = 1; day <= 30; day++) {
-      const dateStr = `2026-06-${day < 10 ? '0' + day : day}`;
-      const isToday = dateStr === '2026-06-25'; // Simulated "today" based on project timestamp
-      
-      let eventsHtml = '';
-      if (eventsByDay[day]) {
-        eventsByDay[day].forEach(ev => {
-          let eventClass = 'event-docente';
-          if (ev.type === 'admin') eventClass = 'event-admin';
-          if (ev.type === 'reunion') eventClass = 'event-reunion';
-          
-          eventsHtml += `
-            <div class="calendar-event-item ${eventClass}" title="${ev.title}">
-              ${ev.title}
-            </div>
-          `;
-        });
-      }
-
-      calendarCells += `
-        <div class="calendar-day-cell ${isToday ? 'today' : ''}">
-          <span class="calendar-day-number">${day}</span>
-          <div class="calendar-event-list">
-            ${eventsHtml}
-          </div>
-        </div>
-      `;
-    }
-
-    // Next month cells to fill grid (June ends on Tuesday, July starts on Wednesday)
-    // Needs 35 cells total (5 rows of 7 days)
-    for (let fill = 1; fill <= 5; fill++) {
-      calendarCells += `
-        <div class="calendar-day-cell other-month">
-          <span class="calendar-day-number">${fill}</span>
-          <div class="calendar-event-list"></div>
-        </div>
-      `;
-    }
+    const today = new Date();
+    let currentDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    let activeTab = 'calendar';
+    let agenda = { cursos: [], horario: [], actividades: [], eventos: [] };
 
     container.innerHTML = `
-      <div class="calendar-wrapper">
-        <div class="calendar-header-actions">
-          <h3 class="calendar-month-title">Junio 2026</h3>
-          <div style="display: flex; gap: 8px;">
-            <button class="calendar-nav-btn" disabled>&lt;</button>
-            <button class="calendar-nav-btn" disabled>Hoy</button>
-            <button class="calendar-nav-btn" disabled>&gt;</button>
-          </div>
-        </div>
-        
-        <div class="calendar-grid">
-          ${labelsHtml}
-          ${calendarCells}
-        </div>
-        
-        <div style="margin-top: 20px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; font-weight: 600;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="width: 12px; height: 12px; background-color: var(--primary-dark); display: inline-block; border-radius: 2px;"></span>
-            Actividad Docente
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="width: 12px; height: 12px; background-color: var(--accent-orange); display: inline-block; border-radius: 2px;"></span>
-            Eventos Administrativos
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="width: 12px; height: 12px; background-color: var(--success); display: inline-block; border-radius: 2px;"></span>
-            Reuniones / Feriados
-          </div>
-        </div>
+      <div class="tabs-container" style="margin-bottom:20px;">
+        <button class="tab-btn active" data-agenda-tab="calendar">Calendario Institucional</button>
+        <button class="tab-btn" data-agenda-tab="schedule">Mi Horario</button>
+        <button class="tab-btn" data-agenda-tab="activities">Actividades Académicas</button>
       </div>
+      <div id="agenda-alert" style="display:none; padding:10px; border-radius:6px; text-align:center; margin-bottom:14px;"></div>
+      <div id="agenda-view"><div class="card" style="text-align:center;">Cargando agenda...</div></div>
     `;
+
+    const view = document.getElementById('agenda-view');
+    const alertBox = document.getElementById('agenda-alert');
+    const tabButtons = Array.from(container.querySelectorAll('[data-agenda-tab]'));
+
+    function showAlert(message, success) {
+      alertBox.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      alertBox.textContent = message;
+      alertBox.style.display = 'block';
+      window.setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        ...options
+      });
+      const result = await response.json().catch(() => ({ success:false, message:'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Error HTTP ${response.status}`);
+      }
+      return result;
+    }
+
+    function formatMonth(date) {
+      const value = new Intl.DateTimeFormat('es-PE', { month:'long', year:'numeric' }).format(date);
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    function parseServerDate(value) {
+      if (!value) return null;
+      const normalized = String(value).replace(' ', 'T');
+      const date = new Date(normalized);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const offset = (firstDay.getDay() + 6) % 7;
+      const daysInMonth = lastDay.getDate();
+      const cellsNeeded = Math.ceil((offset + daysInMonth) / 7) * 7;
+      const eventsByDay = {};
+
+      (agenda.eventos || []).forEach(event => {
+        const start = parseServerDate(event.fecha_inicio);
+        const end = parseServerDate(event.fecha_fin);
+        if (!start || !end) return;
+
+        const cursor = new Date(Math.max(start.getTime(), firstDay.getTime()));
+        cursor.setHours(0, 0, 0, 0);
+        const limit = new Date(Math.min(end.getTime(), lastDay.getTime()));
+        limit.setHours(23, 59, 59, 999);
+
+        while (cursor <= limit) {
+          const day = cursor.getDate();
+          if (!eventsByDay[day]) eventsByDay[day] = [];
+          eventsByDay[day].push(event);
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      });
+
+      const labels = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
+        .map(label => `<div class="calendar-day-name">${label}</div>`).join('');
+      let cells = '';
+
+      for (let i = 0; i < cellsNeeded; i++) {
+        const dayNumber = i - offset + 1;
+        if (dayNumber < 1 || dayNumber > daysInMonth) {
+          cells += '<div class="calendar-day-cell other-month"><div class="calendar-event-list"></div></div>';
+          continue;
+        }
+
+        const isToday = dayNumber === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+        const dayEvents = eventsByDay[dayNumber] || [];
+        const eventsHtml = dayEvents.map(event => {
+          const start = parseServerDate(event.fecha_inicio);
+          const time = start && start.getDate() === dayNumber
+            ? new Intl.DateTimeFormat('es-PE', { hour:'2-digit', minute:'2-digit' }).format(start)
+            : '';
+          return `<div class="calendar-event-item event-admin" title="${escapeHtml(event.nombre)}">${time ? `${escapeHtml(time)} · ` : ''}${escapeHtml(event.nombre)}</div>`;
+        }).join('');
+
+        cells += `
+          <div class="calendar-day-cell ${isToday ? 'today' : ''}">
+            <span class="calendar-day-number">${dayNumber}</span>
+            <div class="calendar-event-list">${eventsHtml}</div>
+          </div>
+        `;
+      }
+
+      view.innerHTML = `
+        <div class="calendar-wrapper">
+          <div class="calendar-header-actions">
+            <div>
+              <h3 class="calendar-month-title">${escapeHtml(formatMonth(currentDate))}</h3>
+              <p style="font-size:12.5px; color:var(--neutral-medium); margin-top:4px;">Eventos institucionales registrados por Dirección.</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="calendar-nav-btn" id="calendar-prev" aria-label="Mes anterior">&lt;</button>
+              <button class="calendar-nav-btn" id="calendar-today">Hoy</button>
+              <button class="calendar-nav-btn" id="calendar-next" aria-label="Mes siguiente">&gt;</button>
+            </div>
+          </div>
+          <div class="calendar-grid">${labels}${cells}</div>
+          ${(agenda.eventos || []).length === 0 ? '<div style="margin-top:16px; text-align:center; color:var(--neutral-medium); font-size:13px;">No hay eventos institucionales registrados para este mes.</div>' : ''}
+        </div>
+      `;
+
+      async function changeMonth(nextDate) {
+        const previousDate = currentDate;
+        currentDate = nextDate;
+        try {
+          await loadAgenda();
+        } catch (error) {
+          currentDate = previousDate;
+          showAlert(error.message, false);
+          renderCalendar();
+        }
+      }
+
+      document.getElementById('calendar-prev').addEventListener('click', () => {
+        changeMonth(new Date(year, month - 1, 1));
+      });
+      document.getElementById('calendar-next').addEventListener('click', () => {
+        changeMonth(new Date(year, month + 1, 1));
+      });
+      document.getElementById('calendar-today').addEventListener('click', () => {
+        changeMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+      });
+    }
+
+    function renderSchedule() {
+      const rows = agenda.horario || [];
+      view.innerHTML = `
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Horario Semanal Asignado</h3>
+              <p style="font-size:12.5px; color:var(--neutral-medium); margin-top:4px;">Información obtenida de ASIGNACION_CURSO.</p>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="school-table">
+              <thead><tr><th>Día</th><th>Hora</th><th>Curso</th><th>Grado y Sección</th><th>Año</th></tr></thead>
+              <tbody>
+                ${rows.length ? rows.map(item => `
+                  <tr>
+                    <td style="font-weight:700;">${escapeHtml(item.dia_horario)}</td>
+                    <td>${escapeHtml(item.hora_inicio)} – ${escapeHtml(item.hora_fin)}</td>
+                    <td>${escapeHtml(item.curso)}</td>
+                    <td>${escapeHtml(item.grado)}</td>
+                    <td>${escapeHtml(item.anio)}</td>
+                  </tr>
+                `).join('') : '<tr><td colspan="5" style="text-align:center; color:var(--neutral-medium);">No tiene horarios activos asignados.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderActivities() {
+      const courses = agenda.cursos || [];
+      const activities = agenda.actividades || [];
+      const courseOptions = courses.map(item => `
+        <option value="${escapeHtml(item.id_gradoCurso)}">${escapeHtml(item.curso)} — ${escapeHtml(item.grado)} (${escapeHtml(item.anio)})</option>
+      `).join('');
+
+      view.innerHTML = `
+        <div class="dashboard-grid" style="grid-template-columns:minmax(300px,0.85fr) minmax(520px,1.65fr);">
+          <div class="card card-accent">
+            <div class="card-header"><h3 class="card-title" id="activity-form-title">Registrar Actividad</h3></div>
+            <form id="activity-form" style="display:flex; flex-direction:column; gap:15px;">
+              <input type="hidden" id="activity-id">
+              <div class="form-group">
+                <label class="form-label-desc" for="activity-course">Curso y Grado</label>
+                <select id="activity-course" class="control-select" required ${courses.length ? '' : 'disabled'}>
+                  <option value="" disabled selected>-- Seleccione --</option>${courseOptions}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label-desc" for="activity-name">Nombre</label>
+                <input type="text" id="activity-name" class="control-input" maxlength="100" placeholder="Ej.: Práctica calificada 2" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label-desc" for="activity-weight">Peso porcentual</label>
+                <input type="number" id="activity-weight" class="control-input" min="0.01" max="100" step="0.01" placeholder="Ej.: 20" required>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button type="submit" id="activity-submit" class="btn btn-primary" style="flex:1;" ${courses.length ? '' : 'disabled'}>Guardar Actividad</button>
+                <button type="button" id="activity-cancel" class="btn btn-secondary" style="display:none;">Cancelar</button>
+              </div>
+              ${courses.length ? '' : '<div class="badge badge-warning" style="padding:10px; text-align:center;">No tiene cursos asignados.</div>'}
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Actividades Registradas</h3>
+                <p style="font-size:12.5px; color:var(--neutral-medium); margin-top:4px;">ACTIVIDADES no posee fecha en la base actual; por eso se administra como lista académica.</p>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="school-table">
+                <thead><tr><th>ID</th><th>Actividad</th><th>Curso</th><th>Grado</th><th>Peso</th><th style="text-align:center;">Acciones</th></tr></thead>
+                <tbody id="activities-tbody">
+                  ${activities.length ? activities.map(item => `
+                    <tr>
+                      <td style="font-weight:600;">${escapeHtml(item.id_actividad)}</td>
+                      <td>${escapeHtml(item.nombre)}</td>
+                      <td>${escapeHtml(item.curso)}</td>
+                      <td>${escapeHtml(item.grado)}</td>
+                      <td><span class="badge badge-primary">${escapeHtml(Number(item.peso).toFixed(2))}%</span></td>
+                      <td style="text-align:center; white-space:nowrap;">
+                        <button type="button" class="btn btn-secondary btn-sm activity-edit" data-id="${escapeHtml(item.id_actividad)}">Editar</button>
+                        <button type="button" class="btn btn-secondary btn-sm activity-delete" data-id="${escapeHtml(item.id_actividad)}" style="border-color:#dc2626; color:#dc2626;">Eliminar</button>
+                      </td>
+                    </tr>
+                  `).join('') : '<tr><td colspan="6" style="text-align:center; color:var(--neutral-medium);">No hay actividades registradas para sus cursos.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const form = document.getElementById('activity-form');
+      const idInput = document.getElementById('activity-id');
+      const courseInput = document.getElementById('activity-course');
+      const nameInput = document.getElementById('activity-name');
+      const weightInput = document.getElementById('activity-weight');
+      const submitBtn = document.getElementById('activity-submit');
+      const cancelBtn = document.getElementById('activity-cancel');
+      const formTitle = document.getElementById('activity-form-title');
+      const tbody = document.getElementById('activities-tbody');
+
+      function resetForm() {
+        form.reset();
+        idInput.value = '';
+        formTitle.textContent = 'Registrar Actividad';
+        submitBtn.textContent = 'Guardar Actividad';
+        cancelBtn.style.display = 'none';
+      }
+
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const id = Number(idInput.value || 0);
+        submitBtn.disabled = true;
+        try {
+          await fetchJson(getActividadesApiUrl(), {
+            method: id ? 'PATCH' : 'POST',
+            headers: {
+              'Content-Type':'application/json',
+              'X-CSRF-Token':getCsrfToken()
+            },
+            body:JSON.stringify({
+              id_actividad:id || undefined,
+              id_gradoCurso:Number(courseInput.value),
+              nombre:nameInput.value.trim(),
+              peso:Number(weightInput.value)
+            })
+          });
+          showAlert(id ? '✓ Actividad actualizada correctamente.' : '✓ Actividad registrada correctamente.', true);
+          resetForm();
+          await loadAgenda();
+        } catch (error) {
+          showAlert(error.message, false);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      cancelBtn.addEventListener('click', resetForm);
+
+      tbody.addEventListener('click', async function(e) {
+        const editButton = e.target.closest('.activity-edit');
+        const deleteButton = e.target.closest('.activity-delete');
+
+        if (editButton) {
+          const item = activities.find(row => Number(row.id_actividad) === Number(editButton.dataset.id));
+          if (!item) return;
+          idInput.value = item.id_actividad;
+          courseInput.value = item.id_gradoCurso;
+          nameInput.value = item.nombre;
+          weightInput.value = Number(item.peso);
+          formTitle.textContent = 'Editar Actividad';
+          submitBtn.textContent = 'Actualizar Actividad';
+          cancelBtn.style.display = '';
+          nameInput.focus();
+          return;
+        }
+
+        if (deleteButton) {
+          const id = Number(deleteButton.dataset.id);
+          const item = activities.find(row => Number(row.id_actividad) === id);
+          if (!window.confirm(`¿Eliminar la actividad ${item ? item.nombre : ''}?`)) return;
+          deleteButton.disabled = true;
+          try {
+            await fetchJson(getActividadesApiUrl(), {
+              method:'DELETE',
+              headers:{
+                'Content-Type':'application/json',
+                'X-CSRF-Token':getCsrfToken()
+              },
+              body:JSON.stringify({ id_actividad:id })
+            });
+            showAlert('✓ Actividad eliminada correctamente.', true);
+            await loadAgenda();
+          } catch (error) {
+            deleteButton.disabled = false;
+            showAlert(error.message, false);
+          }
+        }
+      });
+    }
+
+    function renderActiveView() {
+      tabButtons.forEach(button => button.classList.toggle('active', button.dataset.agendaTab === activeTab));
+      if (activeTab === 'calendar') renderCalendar();
+      if (activeTab === 'schedule') renderSchedule();
+      if (activeTab === 'activities') renderActivities();
+    }
+
+    async function loadAgenda() {
+      view.innerHTML = '<div class="card" style="text-align:center;">Cargando agenda...</div>';
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const result = await fetchJson(`${getActividadesApiUrl()}?year=${year}&month=${month}`);
+      agenda = result.data || { cursos:[], horario:[], actividades:[], eventos:[] };
+      renderActiveView();
+    }
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        activeTab = this.dataset.agendaTab;
+        renderActiveView();
+      });
+    });
+
+    loadAgenda().catch(error => {
+      showAlert(error.message, false);
+      view.innerHTML = '<div class="card" style="text-align:center; color:var(--danger);">No se pudo cargar la agenda docente.</div>';
+    });
   }
 
   /* ==========================================================================
@@ -808,82 +1171,64 @@
   }
 
   /* ==========================================================================
-     5. INCIDENCIAS: REDACCIÓN & LISTA DE INCIDENCIAS
+     5. INCIDENCIAS: REDACCIÓN DOCENTE CON PERSISTENCIA MYSQL
      ========================================================================== */
   function renderIncidencias(container) {
     setPageTitle('Registro de Incidencias');
 
-    function buildTableRows(incidents) {
-      let rows = '';
-      incidents.forEach(inc => {
-        let badgeClass = 'badge-warning';
-        if (inc.status === 'Resuelto') badgeClass = 'badge-success';
-        
-        rows += `
-          <tr>
-            <td style="font-weight: 600;">${inc.id}</td>
-            <td>${inc.date}</td>
-            <td>${inc.studentName}</td>
-            <td>${inc.detail}</td>
-            <td><span class="badge ${badgeClass}">${inc.status}</span></td>
-          </tr>
-        `;
-      });
-      return rows;
-    }
-
-    const db = window.SchoolDB.getData();
-    let studentOptions = '';
-    db.students.forEach(st => {
-      studentOptions += `<option value="${st.name}">${st.name} (${st.grado})</option>`;
-    });
+    let incidencias = [];
 
     container.innerHTML = `
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 1.5fr;">
-        <!-- Incident form -->
+      <div class="dashboard-grid" style="grid-template-columns: minmax(300px, 0.9fr) minmax(520px, 1.6fr);">
         <div class="card card-accent">
           <div class="card-header">
             <h3 class="card-title">Redactar Nueva Incidencia</h3>
           </div>
           <form id="incident-form" class="form-layout" style="display: flex; flex-direction: column; gap: 16px;">
             <div class="form-group">
-              <label class="form-label-desc">Alumno Relacionado</label>
-              <select id="inc-student" class="control-select" required>
-                <option value="" disabled selected>-- Seleccione Alumno --</option>
-                ${studentOptions}
+              <label class="form-label-desc" for="inc-student">Alumno Relacionado</label>
+              <select id="inc-student" class="control-select" required disabled>
+                <option value="">Cargando alumnos...</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label-desc">Detalle del Suceso</label>
-              <textarea id="inc-detail" class="control-textarea" placeholder="Escriba los pormenores del suceso con el alumno..." required></textarea>
+              <label class="form-label-desc" for="inc-priority">Prioridad</label>
+              <select id="inc-priority" class="control-select" required>
+                <option value="Baja">Baja</option>
+                <option value="Media" selected>Media</option>
+                <option value="Alta">Alta</option>
+              </select>
             </div>
-            <div id="inc-alert" class="badge badge-success" style="display:none; text-align: center; padding: 10px; border-radius: 6px;">
-              ✓ Enviado correctamente a Dirección.
+            <div class="form-group">
+              <label class="form-label-desc" for="inc-detail">Detalle del Suceso</label>
+              <textarea id="inc-detail" class="control-textarea" minlength="10" maxlength="3000" placeholder="Describa lo ocurrido de manera clara y objetiva..." required></textarea>
+              <small style="display:block; margin-top:6px; color:var(--neutral-medium);">Mínimo 10 caracteres.</small>
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">
+            <div id="inc-alert" style="display:none; padding:10px; border-radius:6px; text-align:center;"></div>
+            <button type="submit" id="inc-submit-btn" class="btn btn-primary" style="width: 100%;" disabled>
               Reportar a Dirección
             </button>
           </form>
         </div>
 
-        <!-- Incidents List -->
         <div class="card">
-          <div class="card-header">
+          <div class="card-header" style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
             <h3 class="card-title">Mis Incidencias Reportadas</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="inc-refresh-btn">Actualizar</button>
           </div>
           <div class="table-responsive">
             <table class="school-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">ID</th>
-                  <th style="width: 100px;">Fecha</th>
-                  <th style="width: 180px;">Alumno</th>
-                  <th>Detalle / Incidencia</th>
-                  <th style="width: 120px;">Estado</th>
+                  <th style="width:70px;">ID</th>
+                  <th style="width:105px;">Fecha</th>
+                  <th style="width:190px;">Alumno</th>
+                  <th>Detalle</th>
+                  <th style="width:105px;">Prioridad</th>
                 </tr>
               </thead>
               <tbody id="incidents-list-tbody">
-                ${buildTableRows(db.incidents)}
+                <tr><td colspan="5" style="text-align:center;">Cargando incidencias...</td></tr>
               </tbody>
             </table>
           </div>
@@ -891,27 +1236,131 @@
       </div>
     `;
 
-    // Form Submission
     const form = document.getElementById('incident-form');
+    const studentSelect = document.getElementById('inc-student');
+    const prioritySelect = document.getElementById('inc-priority');
+    const detailInput = document.getElementById('inc-detail');
     const tableBody = document.getElementById('incidents-list-tbody');
     const alertBox = document.getElementById('inc-alert');
+    const submitBtn = document.getElementById('inc-submit-btn');
+    const refreshBtn = document.getElementById('inc-refresh-btn');
 
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const studentVal = document.getElementById('inc-student').value;
-      const detailVal = document.getElementById('inc-detail').value;
+    function badgePrioridad(prioridad) {
+      if (prioridad === 'Alta') return 'badge-danger';
+      if (prioridad === 'Baja') return 'badge-success';
+      return 'badge-warning';
+    }
 
-      // Add to simulated DB
-      const newInc = window.SchoolDB.addIncident(studentVal, 'Carlos Rivas', detailVal);
-      
-      // Update List view immediately
-      const updatedDb = window.SchoolDB.getData();
-      tableBody.innerHTML = buildTableRows(updatedDb.incidents);
+    function renderRows() {
+      if (!incidencias.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--neutral-medium);">Aún no ha registrado incidencias.</td></tr>';
+        return;
+      }
 
-      // Reset form and show success message
-      form.reset();
+      tableBody.innerHTML = incidencias.map(inc => `
+        <tr>
+          <td style="font-weight:600;">${escapeHtml(inc.id_incidencia)}</td>
+          <td>${escapeHtml(inc.fecha)}</td>
+          <td>
+            <strong>${escapeHtml(inc.alumno)}</strong>
+            <div style="font-size:11.5px; color:var(--neutral-medium);">${escapeHtml(inc.grado)}</div>
+          </td>
+          <td style="white-space:normal; line-height:1.45;">${escapeHtml(inc.texto)}</td>
+          <td><span class="badge ${badgePrioridad(inc.prioridad)}">${escapeHtml(inc.prioridad)}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function showAlert(message, success) {
+      alertBox.className = `badge ${success ? 'badge-success' : 'badge-danger'}`;
+      alertBox.textContent = message;
       alertBox.style.display = 'block';
-      setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+      window.setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        ...options
+      });
+      const result = await response.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor.' }));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Error HTTP ${response.status}`);
+      }
+      return result;
+    }
+
+    async function loadStudents() {
+      studentSelect.disabled = true;
+      submitBtn.disabled = true;
+      const result = await fetchJson(`${getIncidenciasApiUrl()}?action=students`);
+      const alumnos = Array.isArray(result.data) ? result.data : [];
+
+      if (!alumnos.length) {
+        studentSelect.innerHTML = '<option value="">No tiene alumnos asignados en cursos activos</option>';
+        return;
+      }
+
+      studentSelect.innerHTML = '<option value="" disabled selected>-- Seleccione Alumno --</option>' + alumnos.map(alumno => `
+        <option value="${escapeHtml(alumno.id_alumno)}">${escapeHtml(alumno.nombre_completo)} (${escapeHtml(alumno.grado)})</option>
+      `).join('');
+      studentSelect.disabled = false;
+      submitBtn.disabled = false;
+    }
+
+    async function loadIncidents() {
+      tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando incidencias...</td></tr>';
+      const result = await fetchJson(getIncidenciasApiUrl());
+      incidencias = Array.isArray(result.data) ? result.data : [];
+      renderRows();
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enviando...';
+
+      try {
+        await fetchJson(getIncidenciasApiUrl(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
+          },
+          body: JSON.stringify({
+            id_alumno: Number(studentSelect.value),
+            prioridad: prioritySelect.value,
+            texto: detailInput.value.trim()
+          })
+        });
+
+        form.reset();
+        prioritySelect.value = 'Media';
+        showAlert('✓ Incidencia registrada y enviada a Dirección.', true);
+        await loadIncidents();
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        submitBtn.disabled = studentSelect.options.length <= 1;
+        submitBtn.textContent = 'Reportar a Dirección';
+      }
+    });
+
+    refreshBtn.addEventListener('click', async function() {
+      refreshBtn.disabled = true;
+      try {
+        await loadIncidents();
+      } catch (error) {
+        showAlert(error.message, false);
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+
+    Promise.all([loadStudents(), loadIncidents()]).catch(error => {
+      showAlert(error.message, false);
+      tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger);">No se pudo cargar el módulo.</td></tr>';
     });
   }
 
@@ -1626,6 +2075,9 @@
       }
     }
   }
+
+  updateNotificationBadge();
+  window.setInterval(updateNotificationBadge, 30000);
 
   // Expose methods globally for Router config in docente.html
   window.DocenteModule = {

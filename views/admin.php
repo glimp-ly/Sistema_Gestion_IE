@@ -21,7 +21,7 @@ require_once "views/components/head.php";
       <!-- Barra de Navegación Superior (Navbar) -->
       <?php 
       $userRoleLabel = "Director";
-      $badgeCount = 3;
+      $badgeCount = 0;
       require_once "views/components/navbar.php"; 
       ?>
 

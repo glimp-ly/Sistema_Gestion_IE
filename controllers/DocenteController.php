@@ -16,6 +16,13 @@ class DocenteController
     public function handleRequest(string $method, array $payload = []): array
     {
         if ($method === 'GET') {
+            if (($payload['action'] ?? '') === 'credentials') {
+                $role = strtolower(trim($_SESSION['rol_nombre'] ?? ''));
+                if (!in_array($role, ['director', 'administrador', 'admin'], true)) {
+                    return ['success' => false, 'message' => 'No tiene permiso para consultar las credenciales.', 'data' => null];
+                }
+                return ['success' => true, 'message' => 'Credenciales cargadas correctamente.', 'data' => $this->model->getCredentials()];
+            }
             return ['success' => true, 'message' => 'Docentes cargados correctamente.', 'data' => $this->model->getAll()];
         }
 
